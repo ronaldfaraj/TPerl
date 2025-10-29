@@ -1,4 +1,4 @@
-## Interface: 11507, 110200 , 50500
+## Interface: 11507, 110205, 50502
 ## Author: TULOA
 ## Title: TPerl |cffeda55fPlayer Buffs|r
 ## Title-itIT: TPerl |cffeda55fBenefici Giocatore|r

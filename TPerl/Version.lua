@@ -22,7 +22,7 @@ function TPerl:ADDON_LOADED(addon)
 	self:RegisterEvents()
 
 	self.playerName = string.gsub(UnitName("player").."-"..GetRealmName(), "%s+", "")
-	self.version = C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("TPerl", "Version") or "1.2.4"
+	self.version = C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("TPerl", "Version") or "1.2.0"
 
 	self:UnregisterEvent("ADDON_LOADED")
 end

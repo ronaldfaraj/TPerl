@@ -83,7 +83,7 @@ function TPerl_Player_Buffs_Position(self)
 			local _, playerClass = UnitClass("player")
 			local extraBar
 
-			if (playerClass == "DRUID" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0 and not pconf.noDruidBar) or (playerClass == "PRIEST" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) then
+			if (playerClass == "DRUID" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0 and not pconf.noDruidBar) or (playerClass == "PRIEST" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "DEATHKNIGHT") then
 				extraBar = 1
 			else
 				extraBar = 0

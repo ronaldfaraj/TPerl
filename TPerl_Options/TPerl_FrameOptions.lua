@@ -3794,6 +3794,15 @@ end
 function TPerl_LockRunes_OnConfigClick(self)
 	local checked = OptChecked("LockRunes")
 
+
+ TPerlSpecialPowerBarFrame:EnableMouse(not checked)
+	if TPerlSpecialPowerBarFrame2 then
+	 TPerlSpecialPowerBarFrame2:EnableMouse(not checked)
+	end
+	
+	
+--Old Code
+--[[
 	-- Apply click-through state to MovableHarmonyBar
 	if MovableHarmonyBar then
 		MovableHarmonyBar:EnableMouse(not checked)
@@ -3825,7 +3834,7 @@ function TPerl_LockRunes_OnConfigClick(self)
 	if MovableComboPointBarFrame then
 		MovableComboPointBarFrame:EnableMouse(not checked)
 	end
-	
+	]]--
 
 	-- Preserve old reset behavior
 	if TPerl_Player_Reset then
@@ -3836,7 +3845,20 @@ end
 function TPerl_ShowRunes_OnClick(self)
 	local checked = OptChecked("ShowRunes")
 	
+	if checked == false then
+		TPerlSpecialPowerBarFrame:Hide()
+		if TPerlSpecialPowerBarFrame2 then
+		 TPerlSpecialPowerBarFrame2:Hide()
+		end
+	else
+	 TPerlSpecialPowerBarFrame:Show()
+		if TPerlSpecialPowerBarFrame2 then
+		 TPerlSpecialPowerBarFrame2:Show()
+		end
+	end
 	
+	--Old Code
+	--[[
 	-- Hide Monk Bars
 	if MovableHarmonyBar and checked == false then
 	 MovableHarmonyBar:Hide()
@@ -3907,6 +3929,8 @@ function TPerl_ShowRunes_OnClick(self)
 	 MovableComboPointBarFrame:Show()
 	end
 	
+	]]--
+	
 	if TPerl_Player_Reset then
 		TPerl_Player_Reset(self)
 	end
@@ -3916,6 +3940,50 @@ end
 function TPerl_DockRunes_OnClick(self)
     local checked = OptChecked("DockRunes")
 
+			local xOff, yOff = TPerl_NeedsOffset()
+
+    if TPerlSpecialPowerBarFrame then
+        TPerlSpecialPowerBarFrame:ClearAllPoints()
+
+        if checked then
+            -- Dock to TPerl_Player and disable dragging
+            if TPerl_Player then
+																if IsRetail then
+																	TPerlSpecialPowerBarFrame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0 + xOff, 0 + yOff)
+																elseif IsMistsClassic then
+																 -- This bar is taller and needs up further.
+																 TPerlSpecialPowerBarFrame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0 + xOff, 0 + yOff)
+																end
+            else
+                TPerlSpecialPowerBarFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
+            end
+            TPerlSpecialPowerBarFrame:EnableMouse(false)
+            TPerlSpecialPowerBarFrame:Show()
+        else
+            -- Restore movable saved position
+            if TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
+                TPerlSpecialPowerBarFrame:SetPoint(
+                    TPerlSpecialPowerBarFramePos.point,
+                    UIParent,
+                    TPerlSpecialPowerBarFramePos.relativePoint,
+                    TPerlSpecialPowerBarFramePos.x,
+                    TPerlSpecialPowerBarFramePos.y
+                )
+            else
+                TPerlSpecialPowerBarFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
+                TPerlSpecialPowerBarFramePos = {
+                    point = "CENTER", relativePoint = "CENTER",
+                    x = 0, y = -100,
+                }
+            end
+            TPerlSpecialPowerBarFrame:EnableMouse(true)
+            TPerlSpecialPowerBarFrame:Show()
+        end
+    end
+
+
+    --Old code
+				--[[
     if MovableHarmonyBar then
         MovableHarmonyBar:ClearAllPoints()
 
@@ -4203,6 +4271,7 @@ function TPerl_DockRunes_OnClick(self)
             MovableComboPointBarFrame:Show()
         end
     end
+				]]--
 				
     if TPerl_Player_Reset then
         TPerl_Player_Reset(self)
@@ -4239,4 +4308,63 @@ function TPerl_ToggleDemonicFuryText(self)
             DemonicFuryBarFrame.lockShow = 0
         end
     end
+end
+
+function TPerl_NeedsOffset()
+	local _, playerClass = UnitClass("player")
+	local playerSpec = TPerl_GetSpec()
+	
+	--Offsets if on Mists Classic.
+	if IsMistsClassic then
+	
+	 --Paladin has special needs.
+		if playerClass == "PALADIN" then
+			--Offset for Paladin is:
+			return 0, 15
+		end
+		
+		if playerClass == "MAGE" then
+			--Offset for Mage is:
+			return 0, 15
+		end
+		
+		if playerClass == "PRIEST" then
+			--Offset for Priest is:
+			return 0, 10
+		end
+		
+		--Warlock has special needs based on spec.
+		if playerClass == "WARLOCK" then
+			if playerSpec == 2 then
+				--Offset for Demo Warlock is:
+				return -60, 10
+			end
+		end
+		
+	end
+	
+	--Offsets for if on Retail.
+	if IsRetail then
+	
+	 if playerClass == "DEATHKNIGHT" then
+		 return 0, 10
+		end
+		
+	end
+	
+	--Dont need a special offset so return nothing:
+	return 0, 0
+end
+
+
+function TPerl_GetSpec()
+    if IsRetail then
+        local specIndex = GetSpecialization()
+        if specIndex then
+            return GetSpecializationInfo(specIndex) -- returns actual specID like 256, 257, 258
+        end
+    elseif IsMistsClassic or IsCataClassic then
+        return GetPrimaryTalentTree() -- 1 = Disc, 2 = Holy, 3 = Shadow
+    end
+    return nil
 end

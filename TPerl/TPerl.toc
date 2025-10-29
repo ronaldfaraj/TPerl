@@ -1,5 +1,5 @@
-## Interface: 11507, 110200, 50500
-## Version: 1.1.1
+## Interface: 11507, 110205, 50502
+## Version: 1.2.0
 ## X-Revision: 1
 ## Author: TULOA
 ## Title: TPerl UnitFrames
@@ -16,7 +16,7 @@
 ## Notes-zhCN: 玩家头像增强插件，附带团队助手功能
 ## Notes-zhTW: 提供玩家單位、隊伍、目標、寵物、目標的目標頭像增強以及團隊框架顯示、團隊助手等等功能
 ## SavedVariables: TPerlConfig, TPerlConfig_Global, TPerlConfigNew, TPerlConfigSavePerCharacter, TPerlImportDone
-## SavedVariablesPerCharacter: MovableHarmonyBarPos, MovableHolyPowerBarPos, MovableStaggerBarPos, MovableRuneFramePos, MovableSoulShardBarPos, MovableArcaneChargesBarPos, MovableEssenceBarPos, MovableShadowOrbBarPos, MovableComboPointBarFrame
+## SavedVariablesPerCharacter: TPerlSpecialPowerBarFramePos
 ## OptionalDeps: Clique
 
 

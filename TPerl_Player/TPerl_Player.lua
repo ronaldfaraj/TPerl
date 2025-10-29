@@ -46,7 +46,8 @@ local GetNumGroupMembers = GetNumGroupMembers
 local GetPVPTimer = GetPVPTimer
 local GetRaidRosterInfo = GetRaidRosterInfo
 local GetShapeshiftForm = GetShapeshiftForm
-local GetSpecialization = GetSpecialization
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local GetSpellInfo = GetSpellInfo
 local GetXPExhaustion = GetXPExhaustion
 local InCombatLockdown = InCombatLockdown
@@ -2301,60 +2302,68 @@ function TPerl_Player_InitDruid(self, playerClass)
     end
 				
 				if IsRetail then
-								if MovableComboPointBarFrame then return end
+								if TPerlSpecialPowerBarFrame then return end
 
 								-- Movable container
-								MovableComboPointBarFrame = CreateFrame("Frame", "MovableComboPointBarFrame", UIParent)
-								Mixin(MovableComboPointBarFrame, DruidComboPointBarMixin)
-								MovableComboPointBarFrame:SetSize(200, 40)
-								MovableComboPointBarFrame:SetPoint("CENTER", UIParent, "CENTER", pconf.comboX or 0, pconf.comboY or -120)
-								MovableComboPointBarFrame.unit = "player"
-								MovableComboPointBarFrame.powerType = Enum.PowerType.ComboPoints
+								TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+								Mixin(TPerlSpecialPowerBarFrame, DruidComboPointBarMixin)
+								TPerlSpecialPowerBarFrame:SetSize(200, 40)
+								TPerlSpecialPowerBarFrame:SetPoint("CENTER", UIParent, "CENTER", pconf.comboX or 0, pconf.comboY or -120)
+								TPerlSpecialPowerBarFrame.unit = "player"
+								TPerlSpecialPowerBarFrame.powerType = Enum.PowerType.ComboPoints
 
 								-- Provide the GetUnit method (expected by mixin)
-								function MovableComboPointBarFrame:GetUnit()
+								function TPerlSpecialPowerBarFrame:GetUnit()
 												return self.unit or "player"
 								end
 
 								-- Dragging / saving position
-								MovableComboPointBarFrame:SetMovable(true)
-								MovableComboPointBarFrame:EnableMouse(not pconf.lockRunes)
-								MovableComboPointBarFrame:RegisterForDrag("LeftButton")
-								MovableComboPointBarFrame:SetScript("OnDragStart", function(self)
+								TPerlSpecialPowerBarFrame:SetMovable(true)
+								TPerlSpecialPowerBarFrame:EnableMouse(not pconf.lockRunes)
+								TPerlSpecialPowerBarFrame:RegisterForDrag("LeftButton")
+								TPerlSpecialPowerBarFrame:SetScript("OnDragStart", function(self)
 												if not pconf.lockRunes then self:StartMoving() end
 								end)
-								MovableComboPointBarFrame:SetScript("OnDragStop", function(self)
+								TPerlSpecialPowerBarFrame:SetScript("OnDragStop", function(self)
 												self:StopMovingOrSizing()
-												local _, _, _, xOfs, yOfs = self:GetPoint()
-												pconf.comboX, pconf.comboY = xOfs, yOfs
+												-- Save position if not docked
+												if not (pconf and pconf.dockRunes) then
+																local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
+																TPerlSpecialPowerBarFramePos = {
+																				point = point,
+																				relativePoint = relativePoint,
+																				x = xOfs,
+																				y = yOfs,
+																}
+												end
 								end)
 
 								---------------------------------------------------
 								-- Build buttons using Blizzard’s template
 								---------------------------------------------------
-								MovableComboPointBarFrame.classResourceButtonTable = {}
+								TPerlSpecialPowerBarFrame.classResourceButtonTable = {}
 								local maxPoints = UnitPowerMax("player", Enum.PowerType.ComboPoints) or 5
 								local spacing, size = 6, 28
 
 								for i = 1, maxPoints do
-												local button = CreateFrame("Frame", nil, MovableComboPointBarFrame, "DruidComboPointTemplate")
+												local button = CreateFrame("Frame", nil, TPerlSpecialPowerBarFrame, "DruidComboPointTemplate")
 												Mixin(button, DruidComboPointMixin)
 												button:SetSize(size, size)
 
 												if i == 1 then
-																button:SetPoint("LEFT", MovableComboPointBarFrame, "LEFT", 0, 0)
+																button:SetPoint("LEFT", TPerlSpecialPowerBarFrame, "LEFT", 0, 0)
 												else
-																button:SetPoint("LEFT", MovableComboPointBarFrame.classResourceButtonTable[i-1], "RIGHT", spacing, 0)
+																button:SetPoint("LEFT", TPerlSpecialPowerBarFrame.classResourceButtonTable[i-1], "RIGHT", spacing, 0)
 												end
 
 												button:Setup()
-												MovableComboPointBarFrame.classResourceButtonTable[i] = button
+												TPerlSpecialPowerBarFrame.classResourceButtonTable[i] = button
 								end
 
 								---------------------------------------------------
 								-- Visibility handler
 								---------------------------------------------------
-								function MovableComboPointBarFrame:UpdateVisibility()
+								function TPerlSpecialPowerBarFrame:UpdateVisibility()
 												if self:ShouldShowBar() then
 																self:Show()
 												else
@@ -2365,12 +2374,12 @@ function TPerl_Player_InitDruid(self, playerClass)
 								---------------------------------------------------
 								-- Event handling
 								---------------------------------------------------
-								MovableComboPointBarFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-								MovableComboPointBarFrame:RegisterEvent("UNIT_POWER_UPDATE")
-								MovableComboPointBarFrame:RegisterEvent("UNIT_DISPLAYPOWER")
-								MovableComboPointBarFrame:RegisterEvent("UNIT_MAXPOWER")
-								MovableComboPointBarFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-								MovableComboPointBarFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
+								TPerlSpecialPowerBarFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+								TPerlSpecialPowerBarFrame:RegisterEvent("UNIT_POWER_UPDATE")
+								TPerlSpecialPowerBarFrame:RegisterEvent("UNIT_DISPLAYPOWER")
+								TPerlSpecialPowerBarFrame:RegisterEvent("UNIT_MAXPOWER")
+								TPerlSpecialPowerBarFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+								TPerlSpecialPowerBarFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 												if event == "UNIT_POWER_UPDATE" and (arg1 ~= "player" or arg2 ~= "COMBO_POINTS") then
 																return
 												elseif (event == "UNIT_DISPLAYPOWER" or event == "UNIT_MAXPOWER") and arg1 ~= "player" then
@@ -2382,8 +2391,8 @@ function TPerl_Player_InitDruid(self, playerClass)
 								end)
 
 								-- Initial state
-								MovableComboPointBarFrame:UpdateVisibility()
-								MovableComboPointBarFrame:UpdatePower()
+								TPerlSpecialPowerBarFrame:UpdateVisibility()
+								TPerlSpecialPowerBarFrame:UpdatePower()
 
 								return
 				end
@@ -2431,95 +2440,44 @@ function TPerl_Player_InitDruid(self, playerClass)
     end
 end
 
+function TPerl_Player_InitRogue(self, playerClass) end
 
--- TPerl_Player_InitRogue | Ignoring in v1.1.0
-function TPerl_Player_InitRogue(self, playerClass)
-	if not IsRetail or playerClass ~= "ROGUE" or self.runes then
-		return
-	end
-
-	self.runes = CreateFrame("Frame", "TPerl_Runes", self)
-	self.runes:SetPoint("TOPLEFT", self.statsFrame, "BOTTOMLEFT", 0, 2)
-	self.runes:SetPoint("BOTTOMRIGHT", self.statsFrame, "BOTTOMRIGHT", 0, -22)
-	self.runes.child = CreateFrame("Frame", "TPerlRogueComboPointBarFrame", self.runes, "RogueComboPointBarTemplate")
-	--self.runes.child:SetTooltip(self.runes.child.tooltip1, self.runes.child.tooltip2)
-	self.runes.child.unit = "player"
-
-	if pconf.lockRunes then
-		local moving
-		hooksecurefunc(self.runes.child, "SetPoint", function(self)
-			if moving or not pconf.showRunes or not pconf.lockRunes then
-				return
-			end
-			moving = true
-			self:SetMovable(true)
-			--self:SetUserPlaced(true)
-			self:ClearAllPoints()
-			self:SetPoint("TOP", TPerl_Player.runes, "TOP", 0, -8)
-			self:SetMovable(false)
-			moving = nil
-		end)
-	end
-
-	local parenting
-	hooksecurefunc(self.runes.child, "SetParent", function(self)
-		if parenting or not pconf.showRunes then
-			return
-		end
-		parenting = true
-		self:SetMovable(true)
-		self:SetParent(TPerl_Player.runes)
-		self:ClearAllPoints()
-		self:SetPoint("TOP", TPerl_Player.runes, "TOP", 0, -8)
-		self:SetMovable(false)
-		parenting = nil
-	end)
-
-	self.runes.child:SetParent(self.runes)
-	self.runes.child:ClearAllPoints()
-	self.runes.child:SetPoint("TOP", self.runes, "TOP", 0, -8)
-
-	self.runes.child:Setup()
-end
-
-
--- TPerl_Player_InitWarlock | Complete | Has Watcher
 function TPerl_Player_InitWarlock()
     local _, class = UnitClass("player")
     if class ~= "WARLOCK" then return end
 
     local function BuildWarlockBar()
         -- Clear any existing bar first
-        if MovableSoulShardBar then
-            MovableSoulShardBar:UnregisterAllEvents()
-            MovableSoulShardBar:Hide()
-            MovableSoulShardBar = nil
+        if TPerlSpecialPowerBarFrame then
+            TPerlSpecialPowerBarFrame:UnregisterAllEvents()
+            TPerlSpecialPowerBarFrame:Hide()
+            TPerlSpecialPowerBarFrame = nil
         end
 
-        MovableSoulShardBar = CreateFrame("Frame", "MovableSoulShardBar", UIParent)
-	       MovableSoulShardBar.unit = "player"
+        TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+	       TPerlSpecialPowerBarFrame.unit = "player"
 								
         if IsRetail then
             -- Retail: all specs use unified shard builder
-            TPerl_BuildWarlockSoulShardBar_Retail(MovableSoulShardBar)
+            TPerl_BuildWarlockSoulShardBar_Retail(TPerlSpecialPowerBarFrame)
 
         elseif IsMistsClassic then
             local spec = TPerl_GetWarlockSpec()
 
             if spec == 1 then
                 -- Affliction → Soul Shards
-                TPerl_BuildWarlockSoulShardBar_Mists(MovableSoulShardBar)
+                TPerl_BuildWarlockSoulShardBar_Mists(TPerlSpecialPowerBarFrame)
 
 
             elseif spec == 2 then
                 -- Demonology → Demonic Fury bar
-                TPerl_BuildWarlockDemonicFuryBar_Mists(MovableSoulShardBar)
+                TPerl_BuildWarlockDemonicFuryBar_Mists(TPerlSpecialPowerBarFrame)
 
       
 
             elseif spec == 3 then
                 -- Destruction → Burning Embers
-                TPerl_BuildWarlockBurningEmbersBar_Mists(MovableSoulShardBar)
+                TPerl_BuildWarlockBurningEmbersBar_Mists(TPerlSpecialPowerBarFrame)
 
             end
         end
@@ -2555,16 +2513,16 @@ function TPerl_Player_InitPaladin(self, playerClass)
 
         if IsMistsClassic then
             --if spec == 2 or spec == 3 then  -- Prot / Ret only in MoP
-                if not MovableHolyPowerBar or not MovableHolyPowerBar.Created then
-                    MovableHolyPowerBar = CreateFrame("Frame", "MovableHolyPowerBar", UIParent)
-																				MovableHolyPowerBar.unit = "player"
-                    TPerl_BuildPaladinHolyPowerBar_Mists(MovableHolyPowerBar)
-                    MovableHolyPowerBar.Created = true
+                if not TPerlSpecialPowerBarFrame or not TPerlSpecialPowerBarFrame.Created then
+                    TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+																				TPerlSpecialPowerBarFrame.unit = "player"
+                    TPerl_BuildPaladinHolyPowerBar_Mists(TPerlSpecialPowerBarFrame)
+                    TPerlSpecialPowerBarFrame.Created = true
                 end
-                MovableHolyPowerBar:Show()
+                TPerlSpecialPowerBarFrame:Show()
             -- else
-                -- if MovableHolyPowerBar then
-                    -- MovableHolyPowerBar:Hide()
+                -- if TPerlSpecialPowerBarFrame then
+                    -- TPerlSpecialPowerBarFrame:Hide()
                 -- end
             -- end
 
@@ -2573,16 +2531,16 @@ function TPerl_Player_InitPaladin(self, playerClass)
             local specID = specIndex and GetSpecializationInfo(specIndex)
 
             --if specID == 66 or specID == 70 then  -- Prot and Ret only
-												if not MovableHolyPowerBar or not MovableHolyPowerBar.Created then
-																MovableHolyPowerBar = CreateFrame("Frame", "MovableHolyPowerBar", UIParent)
-																MovableHolyPowerBar.unit = "player"
-																TPerl_BuildPaladinHolyPowerBar_Retail(MovableHolyPowerBar)
-																MovableHolyPowerBar.Created = true
+												if not TPerlSpecialPowerBarFrame or not TPerlSpecialPowerBarFrame.Created then
+																TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+																TPerlSpecialPowerBarFrame.unit = "player"
+																TPerl_BuildPaladinHolyPowerBar_Retail(TPerlSpecialPowerBarFrame)
+																TPerlSpecialPowerBarFrame.Created = true
 												end
-                MovableHolyPowerBar:Show()
+                TPerlSpecialPowerBarFrame:Show()
             --else
-                -- if MovableHolyPowerBar then
-                    -- MovableHolyPowerBar:Hide()
+                -- if TPerlSpecialPowerBarFrame then
+                    -- TPerlSpecialPowerBarFrame:Hide()
                 -- end
             -- end
         end
@@ -2614,21 +2572,21 @@ function TPerl_Player_InitPriest(self, playerClass)
     if playerClass ~= "PRIEST" then return end
 
     if (IsMistsClassic or IsCataClassic) then
-        if not MovableShadowOrbBar then
-            MovableShadowOrbBar = CreateFrame("Frame", "MovableShadowOrbBar", UIParent)
-												MovableShadowOrbBar.unit = "player"
-            MovableShadowOrbBar:SetSize(160, 40)
-            TPerl_BuildPriestShadowOrbBar_Mists(MovableShadowOrbBar)
+        if not TPerlSpecialPowerBarFrame then
+            TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+												TPerlSpecialPowerBarFrame.unit = "player"
+            TPerlSpecialPowerBarFrame:SetSize(160, 40)
+            TPerl_BuildPriestShadowOrbBar_Mists(TPerlSpecialPowerBarFrame)
         end
 
         local function UpdateShadowOrbVisibility()
             local spec = TPerl_GetPriestSpec()
             if spec == 3 then -- Shadow in Classic
-                MovableShadowOrbBar:Show()
+                TPerlSpecialPowerBarFrame:Show()
             else
                 -- tear down
-                MovableShadowOrbBar:Hide()
-                MovableShadowOrbBar:UnregisterAllEvents()
+                TPerlSpecialPowerBarFrame:Hide()
+                TPerlSpecialPowerBarFrame:UnregisterAllEvents()
             end
         end
 
@@ -2667,59 +2625,63 @@ function TPerl_Player_InitMonk(self, playerClass)
 
         if IsRetail then
             -- Harmony (Chi) → Windwalker only
-            if spec == 269 then
-                if not MovableHarmonyBar or not MovableHarmonyBar.Created then
-                    MovableHarmonyBar = CreateFrame("Frame", "MovableHarmonyBar", UIParent)
-																				MovableHarmonyBar.unit = "player"
-                    TPerl_BuildMonkHarmonyBar(MovableHarmonyBar)
-                    MovableHarmonyBar.Created = true
+            if spec == 269 or spec == 270 then
+                if not TPerlSpecialPowerBarFrame or not TPerlSpecialPowerBarFrame.Created then
+                    TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+																				TPerlSpecialPowerBarFrame.unit = "player"
+																				TPerlSpecialPowerBarFrame:EnableMouse(not pconf.lockRunes)
+                    TPerl_BuildMonkHarmonyBar(TPerlSpecialPowerBarFrame)
+                    TPerlSpecialPowerBarFrame.Created = true
                 end
             else
-                if MovableHarmonyBar then
-                    MovableHarmonyBar:UnregisterAllEvents()
-                    MovableHarmonyBar:Hide()
-                    MovableHarmonyBar = nil
+                if TPerlSpecialPowerBarFrame then
+                    TPerlSpecialPowerBarFrame:UnregisterAllEvents()
+                    TPerlSpecialPowerBarFrame:Hide()
+                    TPerlSpecialPowerBarFrame = nil
                 end
             end
 
             -- Stagger → Brewmaster only
             if spec == 268 then
-                if not MovableStaggerBar or not MovableStaggerBar.Created then
-                    MovableStaggerBar = CreateFrame("Frame", "MovableStaggerBar", UIParent)
-																				MovableStaggerBar.unit = "player"
-                    TPerl_BuildMonkStaggerBar(MovableStaggerBar)
-                    MovableStaggerBar.Created = true
+                if not TPerlSpecialPowerBarFrame2 or not TPerlSpecialPowerBarFrame2.Created then
+                    TPerlSpecialPowerBarFrame2 = CreateFrame("Frame", "TPerlSpecialPowerBarFrame2", UIParent)
+																				TPerlSpecialPowerBarFrame2.unit = "player"
+																				TPerlSpecialPowerBarFrame2:EnableMouse(not pconf.lockRunes)
+                    TPerl_BuildMonkStaggerBar(TPerlSpecialPowerBarFrame2)
+                    TPerlSpecialPowerBarFrame2.Created = true
                 end
             else
-                if MovableStaggerBar then
-                    MovableStaggerBar:UnregisterAllEvents()
-                    MovableStaggerBar:Hide()
-                    MovableStaggerBar = nil
+                if TPerlSpecialPowerBarFrame2 then
+                    TPerlSpecialPowerBarFrame2:UnregisterAllEvents()
+                    TPerlSpecialPowerBarFrame2:Hide()
+                    TPerlSpecialPowerBarFrame2 = nil
                 end
             end
 
         elseif IsMistsClassic then
             -- Harmony (Chi) → all specs in MoP
-            if not MovableHarmonyBar or not MovableHarmonyBar.Created then
-                MovableHarmonyBar = CreateFrame("Frame", "MovableHarmonyBar", UIParent)
-																MovableHarmonyBar.unit = "player"
-                TPerl_BuildMonkHarmonyBar_Mists(MovableHarmonyBar)
-                MovableHarmonyBar.Created = true
+            if not TPerlSpecialPowerBarFrame or not TPerlSpecialPowerBarFrame.Created then
+                TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+																TPerlSpecialPowerBarFrame.unit = "player"
+																TPerlSpecialPowerBarFrame:EnableMouse(not pconf.lockRunes)
+                TPerl_BuildMonkHarmonyBar_Mists(TPerlSpecialPowerBarFrame)
+                TPerlSpecialPowerBarFrame.Created = true
             end
 
             -- Stagger → Brewmaster tree only
             if spec == 1 then
-                if not MovableStaggerBar or not MovableStaggerBar.Created then
-                    MovableStaggerBar = CreateFrame("Frame", "MovableStaggerBar", UIParent)
-																				MovableStaggerBar.unit = "player"
-                    TPerl_BuildMonkStaggerBar_Mists(MovableStaggerBar)
-                    MovableStaggerBar.Created = true
+                if not TPerlSpecialPowerBarFrame2 or not TPerlSpecialPowerBarFrame2.Created then
+                    TPerlSpecialPowerBarFrame2 = CreateFrame("Frame", "TPerlSpecialPowerBarFrame2", UIParent)
+																				TPerlSpecialPowerBarFrame2.unit = "player"
+																				TPerlSpecialPowerBarFrame2:EnableMouse(not pconf.lockRunes)
+                    TPerl_BuildMonkStaggerBar_Mists(TPerlSpecialPowerBarFrame2)
+                    TPerlSpecialPowerBarFrame2.Created = true
                 end
             else
-                if MovableStaggerBar then
-                    MovableStaggerBar:UnregisterAllEvents()
-                    MovableStaggerBar:Hide()
-                    MovableStaggerBar = nil
+                if TPerlSpecialPowerBarFrame2 then
+                    TPerlSpecialPowerBarFrame2:UnregisterAllEvents()
+                    TPerlSpecialPowerBarFrame2:Hide()
+                    TPerlSpecialPowerBarFrame2 = nil
                 end
             end
         end
@@ -2754,17 +2716,17 @@ function TPerl_Player_InitMage(self, playerClass)
     -- Function to (re)build the bar
     ---------------------------------------------------
     local function EnsureArcaneBar()
-        if not MovableArcaneChargesBar then
-            MovableArcaneChargesBar = CreateFrame("Frame", "MovableArcaneChargesBar", UIParent)
-            MovableArcaneChargesBar.unit = "player"
+        if not TPerlSpecialPowerBarFrame then
+            TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+            TPerlSpecialPowerBarFrame.unit = "player"
         end
 
         -- If already has UpdateCharges, we assume it’s built
-        if not MovableArcaneChargesBar.UpdateCharges then
+        if not TPerlSpecialPowerBarFrame.UpdateCharges then
             if IsMistsClassic then
-                TPerl_BuildMageArcaneChargesBar_Mists(MovableArcaneChargesBar)
+                TPerl_BuildMageArcaneChargesBar_Mists(TPerlSpecialPowerBarFrame)
             elseif IsRetail then
-                TPerl_BuildMageArcaneChargesBar_Retail(MovableArcaneChargesBar)
+                TPerl_BuildMageArcaneChargesBar_Retail(TPerlSpecialPowerBarFrame)
             end
         end
     end
@@ -2778,16 +2740,16 @@ function TPerl_Player_InitMage(self, playerClass)
 
         if isArcane then
             EnsureArcaneBar()
-            MovableArcaneChargesBar:Show()
+            TPerlSpecialPowerBarFrame:Show()
             -- re-enable events if bar supports them
-            if MovableArcaneChargesBar.UpdateCharges then
-                MovableArcaneChargesBar:RegisterEvent("PLAYER_ENTERING_WORLD")
-                MovableArcaneChargesBar:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
-                MovableArcaneChargesBar:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+            if TPerlSpecialPowerBarFrame.UpdateCharges then
+                TPerlSpecialPowerBarFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+                TPerlSpecialPowerBarFrame:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
+                TPerlSpecialPowerBarFrame:RegisterUnitEvent("UNIT_MAXPOWER", "player")
             end
-        elseif MovableArcaneChargesBar then
-            MovableArcaneChargesBar:Hide()
-            MovableArcaneChargesBar:UnregisterAllEvents()
+        elseif TPerlSpecialPowerBarFrame then
+            TPerlSpecialPowerBarFrame:Hide()
+            TPerlSpecialPowerBarFrame:UnregisterAllEvents()
         end
     end
 
@@ -2812,13 +2774,13 @@ function TPerl_Player_InitDK(self, playerClass)
 		return
 	end
 
-	if not MovableRuneFrame then
-    MovableRuneFrame = CreateFrame("Frame", "MovableRuneFrame", UIParent)
-				MovableRuneFrame.unit = "player"
+	if not TPerlSpecialPowerBarFrame then
+    TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+				TPerlSpecialPowerBarFrame.unit = "player"
     if IsRetail then
-        TPerl_BuildDKRuneFrame(MovableRuneFrame)
+        TPerl_BuildDKRuneFrame(TPerlSpecialPowerBarFrame)
     elseif IsMistsClassic then
-        TPerl_BuildDKRuneFrame_Mists(MovableRuneFrame)
+        TPerl_BuildDKRuneFrame_Mists(TPerlSpecialPowerBarFrame)
     end
 	end
 ----------
@@ -2832,15 +2794,15 @@ function TPerl_Player_InitEvoker(self, playerClass)
         return
     end
 
-    if not MovableEssenceBar then
-        MovableEssenceBar = CreateFrame("Frame", "MovableEssenceBar", UIParent)
-								MovableEssenceBar.unit = "player"
-        MovableEssenceBar:SetMovable(true)
-        MovableEssenceBar:SetClampedToScreen(true)
-        MovableEssenceBar:SetSize(150, 30)
-        MovableEssenceBar:Show()
+    if not TPerlSpecialPowerBarFrame then
+        TPerlSpecialPowerBarFrame = CreateFrame("Frame", "TPerlSpecialPowerBarFrame", UIParent)
+								TPerlSpecialPowerBarFrame.unit = "player"
+        TPerlSpecialPowerBarFrame:SetMovable(true)
+        TPerlSpecialPowerBarFrame:SetClampedToScreen(true)
+        TPerlSpecialPowerBarFrame:SetSize(150, 30)
+        TPerlSpecialPowerBarFrame:Show()
 
-        TPerl_BuildEvokerEssenceBar_Retail(MovableEssenceBar)
+        TPerl_BuildEvokerEssenceBar_Retail(TPerlSpecialPowerBarFrame)
     end
 
     ---------------------------------------------------
@@ -2856,9 +2818,9 @@ function TPerl_Player_InitEvoker(self, playerClass)
             local specID = specIndex and GetSpecializationInfo(specIndex)
             -- All specs use Essence, so show always
             if playerClass == "EVOKER" then
-                MovableEssenceBar:Show()
+                TPerlSpecialPowerBarFrame:Show()
             else
-                MovableEssenceBar:Hide()
+                TPerlSpecialPowerBarFrame:Hide()
             end
         end
 
@@ -2914,18 +2876,18 @@ function TPerl_BuildMonkStaggerBar(frame)
 												return
 								end
 								frame:EnableMouse(false)
-				elseif MovableStaggerBarPos and MovableStaggerBarPos.point then
+				elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
 								frame:SetPoint(
-												MovableStaggerBarPos.point,
+												TPerlSpecialPowerBarFramePos.point,
 												UIParent,
-												MovableStaggerBarPos.relativePoint,
-												MovableStaggerBarPos.x,
-												MovableStaggerBarPos.y
+												TPerlSpecialPowerBarFramePos.relativePoint,
+												TPerlSpecialPowerBarFramePos.x,
+												TPerlSpecialPowerBarFramePos.y
 								)
 								frame:EnableMouse(true)
 				else
 								frame:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
-								MovableStaggerBarPos = {
+								TPerlSpecialPowerBarFramePos = {
 												point = "CENTER", relativePoint = "CENTER", x = 0, y = -150,
 								}
 								frame:EnableMouse(true)
@@ -2998,7 +2960,7 @@ function TPerl_BuildMonkStaggerBar(frame)
     frame:HookScript("OnDragStop", function(self)
         if not (pconf and pconf.dockRunes) then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableStaggerBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -3045,18 +3007,18 @@ function TPerl_BuildMonkStaggerBar_Mists(frame)
     if pconf and pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableStaggerBarPos and MovableStaggerBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableStaggerBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableStaggerBarPos.relativePoint,
-            MovableStaggerBarPos.x,
-            MovableStaggerBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(true)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
-        MovableStaggerBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -150,
         }
         frame:EnableMouse(true)
@@ -3084,7 +3046,7 @@ function TPerl_BuildMonkStaggerBar_Mists(frame)
         self:StopMovingOrSizing()
         if not (pconf and pconf.dockRunes) then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableStaggerBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -3201,17 +3163,17 @@ function TPerl_BuildMonkHarmonyBar(frame)
             -- Windwalker: dock bottom center
             frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         end
-    elseif MovableHarmonyBarPos and MovableHarmonyBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableHarmonyBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableHarmonyBarPos.relativePoint,
-            MovableHarmonyBarPos.x,
-            MovableHarmonyBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableHarmonyBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
     end
@@ -3239,7 +3201,7 @@ function TPerl_BuildMonkHarmonyBar(frame)
         self:StopMovingOrSizing()
         if not (pconf and pconf.dockRunes) then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableHarmonyBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -3361,18 +3323,18 @@ function TPerl_BuildMonkHarmonyBar_Mists(frame)
     if pconf and pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableHarmonyBarPos and MovableHarmonyBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableHarmonyBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableHarmonyBarPos.relativePoint,
-            MovableHarmonyBarPos.x,
-            MovableHarmonyBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(true)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableHarmonyBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
         frame:EnableMouse(true)
@@ -3399,7 +3361,7 @@ function TPerl_BuildMonkHarmonyBar_Mists(frame)
 								-- Save position if not docked
 								if not (pconf and pconf.dockRunes) then
 												local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-												MovableHarmonyBarPos = {
+												TPerlSpecialPowerBarFramePos = {
 																point = point,
 																relativePoint = relativePoint,
 																x = xOfs,
@@ -3567,18 +3529,18 @@ function TPerl_BuildPaladinHolyPowerBar_Retail(frame)
     if pconf and pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableHolyPowerBarPos and MovableHolyPowerBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableHolyPowerBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableHolyPowerBarPos.relativePoint,
-            MovableHolyPowerBarPos.x,
-            MovableHolyPowerBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not (pconf and pconf.lockRunes))
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -120)
-        MovableHolyPowerBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -120,
         }
         frame:EnableMouse(not (pconf and pconf.lockRunes))
@@ -3606,7 +3568,7 @@ function TPerl_BuildPaladinHolyPowerBar_Retail(frame)
         self:StopMovingOrSizing()
         if not (pconf and pconf.dockRunes) then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableHolyPowerBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -3736,20 +3698,20 @@ function TPerl_BuildPaladinHolyPowerBar_Mists(frame)
     ---------------------------------------------------
     frame:ClearAllPoints()
     if pconf.dockRunes then
-        frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
+        frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 15)
         frame:EnableMouse(false)
-    elseif MovableHolyPowerBarPos and MovableHolyPowerBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableHolyPowerBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableHolyPowerBarPos.relativePoint,
-            MovableHolyPowerBarPos.x,
-            MovableHolyPowerBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -120)
-        MovableHolyPowerBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -120,
         }
         frame:EnableMouse(not pconf.lockRunes)
@@ -3793,7 +3755,7 @@ function TPerl_BuildPaladinHolyPowerBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableHolyPowerBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -3819,18 +3781,18 @@ function TPerl_BuildDKRuneFrame(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableRuneFramePos and MovableRuneFramePos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableRuneFramePos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableRuneFramePos.relativePoint,
-            MovableRuneFramePos.x,
-            MovableRuneFramePos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableRuneFramePos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
         frame:EnableMouse(not pconf.lockRunes)
@@ -3857,7 +3819,7 @@ function TPerl_BuildDKRuneFrame(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableRuneFramePos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -3907,18 +3869,18 @@ function TPerl_BuildDKRuneFrame_Mists(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableRuneFramePos and MovableRuneFramePos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableRuneFramePos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableRuneFramePos.relativePoint,
-            MovableRuneFramePos.x,
-            MovableRuneFramePos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableRuneFramePos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
         frame:EnableMouse(not pconf.lockRunes)
@@ -3946,7 +3908,7 @@ function TPerl_BuildDKRuneFrame_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableRuneFramePos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -4072,18 +4034,18 @@ function TPerl_BuildWarlockSoulShardBar_Mists(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableSoulShardBarPos and MovableSoulShardBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableSoulShardBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableSoulShardBarPos.relativePoint,
-            MovableSoulShardBarPos.x,
-            MovableSoulShardBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableSoulShardBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
+        TPerlSpecialPowerBarFramePos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
 				
@@ -4106,7 +4068,7 @@ function TPerl_BuildWarlockSoulShardBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableSoulShardBarPos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
+            TPerlSpecialPowerBarFramePos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
         end
     end)
 
@@ -4158,20 +4120,20 @@ function TPerl_BuildWarlockDemonicFuryBar_Mists(frame)
     ---------------------------------------------------
     frame:ClearAllPoints()
     if pconf.dockRunes then
-        frame:SetPoint("TOPLEFT", TPerl_PlayerstatsFrame, "BOTTOMLEFT", 0, -4)
+        frame:SetPoint("TOPLEFT", TPerl_PlayerstatsFrame, "BOTTOMLEFT", -60, 10) --TPerlSpecialPowerBarFrame:SetPoint("TOPLEFT", TPerl_PlayerstatsFrame, "BOTTOMLEFT", 0, -4)
         frame:EnableMouse(false)
-    elseif MovableSoulShardBarPos and MovableSoulShardBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableSoulShardBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableSoulShardBarPos.relativePoint,
-            MovableSoulShardBarPos.x,
-            MovableSoulShardBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -120)
-        MovableSoulShardBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER",
             relativePoint = "CENTER",
             x = 0,
@@ -4201,7 +4163,7 @@ function TPerl_BuildWarlockDemonicFuryBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableSoulShardBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -4219,6 +4181,7 @@ function TPerl_BuildWarlockDemonicFuryBar_Mists(frame)
         WarlockPowerFrame:SetParent(frame)
         WarlockPowerFrame:SetScale(1.0)
         WarlockPowerFrame:EnableMouse(false) -- click-through
+        WarlockPowerFrame:SetFrameStrata("BACKGROUND")
         WarlockPowerFrame:Show()
 
         -- Force Demonic Fury text always visible
@@ -4227,6 +4190,7 @@ function TPerl_BuildWarlockDemonicFuryBar_Mists(frame)
             DemonicFuryBarFrame.showText = true
             DemonicFuryBarFrame.lockShow = 1
 												DemonicFuryBarFrame:EnableMouse(false)
+												DemonicFuryBarFrame:SetFrameStrata("BACKGROUND")
         end
     end
 
@@ -4276,18 +4240,18 @@ function TPerl_BuildWarlockBurningEmbersBar_Mists(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableSoulShardBarPos and MovableSoulShardBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableSoulShardBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableSoulShardBarPos.relativePoint,
-            MovableSoulShardBarPos.x,
-            MovableSoulShardBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableSoulShardBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
+        TPerlSpecialPowerBarFramePos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
 				
@@ -4310,7 +4274,7 @@ function TPerl_BuildWarlockBurningEmbersBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableSoulShardBarPos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
+            TPerlSpecialPowerBarFramePos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
         end
     end)
 
@@ -4368,18 +4332,18 @@ function TPerl_BuildWarlockSoulShardBar_Retail(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableSoulShardBarPos and MovableSoulShardBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableSoulShardBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableSoulShardBarPos.relativePoint,
-            MovableSoulShardBarPos.x,
-            MovableSoulShardBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableSoulShardBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
+        TPerlSpecialPowerBarFramePos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
 				
@@ -4402,7 +4366,7 @@ function TPerl_BuildWarlockSoulShardBar_Retail(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableSoulShardBarPos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
+            TPerlSpecialPowerBarFramePos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
         end
     end)
 
@@ -4504,21 +4468,21 @@ function TPerl_BuildMageArcaneChargesBar_Retail(frame)
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
 
-    elseif MovableArcaneChargesBarPos and MovableArcaneChargesBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         -- Restore from saved pos
         frame:SetPoint(
-            MovableArcaneChargesBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableArcaneChargesBarPos.relativePoint,
-            MovableArcaneChargesBarPos.x,
-            MovableArcaneChargesBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
 
     else
         -- First-time default: visible under player
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableArcaneChargesBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER",
             relativePoint = "CENTER",
             x = 0,
@@ -4546,7 +4510,7 @@ function TPerl_BuildMageArcaneChargesBar_Retail(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableArcaneChargesBarPos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
+            TPerlSpecialPowerBarFramePos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
         end
     end)
 
@@ -4608,18 +4572,18 @@ function TPerl_BuildMageArcaneChargesBar_Mists(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableArcaneChargesBarPos and MovableArcaneChargesBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableArcaneChargesBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableArcaneChargesBarPos.relativePoint,
-            MovableArcaneChargesBarPos.x,
-            MovableArcaneChargesBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableArcaneChargesBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
         frame:EnableMouse(not pconf.lockRunes)
@@ -4643,7 +4607,7 @@ function TPerl_BuildMageArcaneChargesBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableArcaneChargesBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point, relativePoint = relativePoint, x = xOfs, y = yOfs,
             }
         end
@@ -4805,18 +4769,18 @@ function TPerl_BuildEvokerEssenceBar_Retail(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableEssenceBarPos and MovableEssenceBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableEssenceBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableEssenceBarPos.relativePoint,
-            MovableEssenceBarPos.x,
-            MovableEssenceBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableEssenceBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
+        TPerlSpecialPowerBarFramePos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
 				
@@ -4842,7 +4806,7 @@ function TPerl_BuildEvokerEssenceBar_Retail(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableEssenceBarPos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
+            TPerlSpecialPowerBarFramePos = { point = point, relativePoint = relativePoint, x = xOfs, y = yOfs }
         end
     end)
 
@@ -4944,18 +4908,18 @@ function TPerl_BuildPriestShadowOrbBar_Mists(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableShadowOrbsBarPos and MovableShadowOrbsBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableShadowOrbsBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableShadowOrbsBarPos.relativePoint,
-            MovableShadowOrbsBarPos.x,
-            MovableShadowOrbsBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
-        MovableShadowOrbsBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
         frame:EnableMouse(not pconf.lockRunes)
@@ -4984,7 +4948,7 @@ function TPerl_BuildPriestShadowOrbBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableShadowOrbsBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
@@ -5074,18 +5038,18 @@ function TPerl_BuildBalanceBar_Mists(frame)
     if pconf.dockRunes then
         frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
         frame:EnableMouse(false)
-    elseif MovableBalanceBarPos and MovableBalanceBarPos.point then
+    elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
-            MovableBalanceBarPos.point,
+            TPerlSpecialPowerBarFramePos.point,
             UIParent,
-            MovableBalanceBarPos.relativePoint,
-            MovableBalanceBarPos.x,
-            MovableBalanceBarPos.y
+            TPerlSpecialPowerBarFramePos.relativePoint,
+            TPerlSpecialPowerBarFramePos.x,
+            TPerlSpecialPowerBarFramePos.y
         )
         frame:EnableMouse(not pconf.lockRunes)
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
-        MovableBalanceBarPos = {
+        TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -150,
         }
         frame:EnableMouse(not pconf.lockRunes)
@@ -5127,7 +5091,7 @@ function TPerl_BuildBalanceBar_Mists(frame)
         self:StopMovingOrSizing()
         if not pconf.dockRunes then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
-            MovableBalanceBarPos = {
+            TPerlSpecialPowerBarFramePos = {
                 point = point,
                 relativePoint = relativePoint,
                 x = xOfs,
