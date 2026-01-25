@@ -195,7 +195,7 @@ function TPerl_Player_BuffSetup(self)
 	else
 		BuffFrame:Show()
 		BuffFrame:RegisterEvent("UNIT_AURA")
-		if not IsRetail then
+		if not IsRetail and (not IsTBCAnni) then
 			TemporaryEnchantFrame:Show()
 		end
 	end
