@@ -1,2 +1,4 @@
-Fixed missed spot for TemporaryEnchantFrame
+Version 1.2.5:
+
+Fix issue with hiding PartyFrame due to it being renamed to match Retail.
 
