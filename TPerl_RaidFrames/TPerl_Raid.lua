@@ -313,6 +313,7 @@ function TPerl_Raid_OnLoad(self)
 	end]]
 
 	TPerl_RegisterOptionChanger(function()
+		--print("TPerl_RaidFrames\TPerl_Raid.lua:315")
 		if (raidLoaded) then
 			TPerl_RaidTitles()
 		end
@@ -324,7 +325,7 @@ function TPerl_Raid_OnLoad(self)
 			TPerl_Raid_UpdateDisplayAll()
 			SkipHighlightUpdate = nil
 		end
-	end, "Raid")
+	end, "Raid", nil, "TPerl_Raid.lua:315")
 
 	TPerl_Raid_OnLoad = nil
 end

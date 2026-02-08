@@ -2,6 +2,7 @@
 -- Author: TULOA
 -- License: GNU GPL v3, 18 October 2014
 
+local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
@@ -185,7 +186,7 @@ function TPerl_TargetTarget_OnLoad(self)
 	TPerl_Highlight:Register(TPerl_TargetTarget_HighlightCallback, self)
 
 	if self == TPerl_TargetTarget then
-		TPerl_RegisterOptionChanger(TPerl_TargetTarget_Set_Bits, "TargetTarget")
+		TPerl_RegisterOptionChanger(TPerl_TargetTarget_Set_Bits, "TargetTarget", "TPerl_TargetTarget_Set_Bits")
 	end
 
 	if TPerl_TargetTarget and TPerl_FocusTarget and TPerl_PetTarget and TPerl_TargetTargetTarget then
@@ -392,9 +393,17 @@ function TPerl_TargetTarget_OnUpdate(self, elapsed)
 	local newMana = UnitPower(partyid)
 	local newManaMax = UnitPowerMax(partyid)
 	local newAFK = UnitIsAFK(partyid)
-
-	if (conf.showAFK and newAFK ~= self.afk) or (newHP ~= self.targethp) or (newHPMax ~= self.targethpmax) then
-		TPerl_Target_UpdateHealth(self)
+ 
+	if not IsRetail then
+		if (conf.showAFK and newAFK ~= self.afk) or (newHP ~= self.targethp) or (newHPMax ~= self.targethpmax) then
+			TPerl_Target_UpdateHealth(self)
+		end
+	else
+	 if (conf.showAFK and newAFK ~= self.afk) then
+			TPerl_Target_UpdateHealth(self)
+		end
+		self:RegisterUnitEvent("UNIT_HEALTH", "targettarget")
+  self:RegisterUnitEvent("UNIT_MAXHEALTH", "targettarget")
 	end
 
 	if (newManaType ~= self.targetmanatype) then
@@ -402,8 +411,14 @@ function TPerl_TargetTarget_OnUpdate(self, elapsed)
 		TPerl_Target_SetMana(self)
 	end
 
-	if (newMana ~= self.targetmana) or (newManaMax ~= self.targetmanamax) then
-		TPerl_Target_SetMana(self)
+ if not IsRetail then
+		if (newMana ~= self.targetmana) or (newManaMax ~= self.targetmanamax) then
+			TPerl_Target_SetMana(self)
+		end
+	else
+	 
+		self:RegisterUnitEvent("UNIT_POWER_UPDATE", "targettarget")
+  self:RegisterUnitEvent("UNIT_MAXPOWER", "targettarget")
 	end
 
 	--[[if conf.showFD then
@@ -534,6 +549,10 @@ function TPerl_TargetTarget_OnEvent(self, event, unitID, ...)
 			end
 			TPerl_NoFadeBars()
 		end
+	elseif (event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH") then
+  TPerl_Target_UpdateHealth(self)
+	elseif (event == "UNIT_MANA" or event == "UNIT_MAXMANA") then
+  TPerl_Target_SetMana(self)
 	end
 end
 
@@ -666,6 +685,7 @@ end
 
 -- TPerl_TargetTarget_Set_Bits
 function TPerl_TargetTarget_Set_Bits()
+ --print("Tperl_TargetTarget.lua:668")
 	if not TPerl_TargetTarget then
 		return
 	end

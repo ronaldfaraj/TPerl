@@ -205,7 +205,7 @@ function TPerl_Player_OnLoad(self)
 
 	TPerl_RegisterPerlFrames(self, perlframes)--, self.runes
 
-	TPerl_RegisterOptionChanger(TPerl_Player_Set_Bits, self)
+	TPerl_RegisterOptionChanger(TPerl_Player_Set_Bits, self, "TPerl_Player_Set_Bits")
 	TPerl_Highlight:Register(TPerl_Player_HighlightCallback, self)
 	--self.IgnoreHighlightStates = {AGGRO = true}
 
@@ -668,17 +668,28 @@ function TPerl_Player_DruidBarUpdate(self)
 			druidBar = self.statsFrame.druidBar
 		end
 	end
-
-	local maxMana = UnitPowerMax("player", 0)
-	if maxMana == 0 then
-		maxMana = nil
+	
+	
+	if IsRetail then
+	 local maxMana = UnitPowerMax("player", 0)
+		local currMana = UnitPower("player", 0)
+		local currMana100 = UnitPowerPercent("player", Enum.PowerType.Mana, false, CurveConstants.ScaleTo100)
+		druidBar:SetMinMaxValues(0, maxMana)
+		druidBar:SetValue(currMana)
+	 druidBar.text:SetFormattedText("%d/%d", currMana, maxMana)
+		druidBar.percent:SetText(currMana100 .. "%")
+	else
+	 local maxMana = UnitPowerMax("player", 0)
+		local currMana = UnitPower("player", 0)
+	 if maxMana == 0 then
+		 maxMana = nil
+		end
+		druidBar:SetMinMaxValues(0, maxMana or 1)
+		druidBar:SetValue(currMana or 0)
+	 druidBar.text:SetFormattedText("%d/%d", ceil(currMana or 0), maxMana or 1)
+		druidBar.percent:SetFormattedText(percD, (currMana or 0) * 100 / (maxMana or 1))
 	end
-	local currMana = UnitPower("player", 0)
-
-	druidBar:SetMinMaxValues(0, maxMana or 1)
-	druidBar:SetValue(currMana or 0)
-	druidBar.text:SetFormattedText("%d/%d", ceil(currMana or 0), maxMana or 1)
-	druidBar.percent:SetFormattedText(percD, (currMana or 0) * 100 / (maxMana or 1))
+	
 
 	--local druidBarExtra
 	if ((playerClass == "DRUID" or playerClass == "PRIEST") and UnitPowerType(self.partyid) > 0) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0) then -- Shaman's UnitPowerType is buggy
@@ -743,23 +754,29 @@ end
 -- TPerl_Player_UpdateMana
 local function TPerl_Player_UpdateMana(self)
 	local powerType = TPerl_GetDisplayedPowerType(self.partyid)
+	local powerPercent
 	local unitPower = UnitPower(self.partyid, powerType)
 	local unitPowerMax = UnitPowerMax(self.partyid, powerType)
 
 	self.statsFrame.manaBar:SetMinMaxValues(0, unitPowerMax)
 	self.statsFrame.manaBar:SetValue(unitPower)
 
-	-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
-	local powerPercent
-	if unitPower > 0 and unitPowerMax == 0 then -- We have current mana but max mana failed.
-		unitPowerMax = unitPower -- Make max mana at least equal to current health
-		powerPercent = 1 -- And percent 100% cause a number divided by itself is 1, duh.
-	elseif unitPower == 0 and unitPowerMax == 0 then -- Probably doesn't use mana or is oom?
-		powerPercent = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
+ if not IsRetail then
+		-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
+		if unitPower > 0 and unitPowerMax == 0 then -- We have current mana but max mana failed.
+			unitPowerMax = unitPower -- Make max mana at least equal to current health
+			powerPercent = 1 -- And percent 100% cause a number divided by itself is 1, duh.
+		elseif unitPower == 0 and unitPowerMax == 0 then -- Probably doesn't use mana or is oom?
+			powerPercent = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
+		else
+			powerPercent = unitPower / unitPowerMax -- Everything is dandy, so just do it right way.
+		end
+ 	-- end division by 0 check
 	else
-		powerPercent = unitPower / unitPowerMax -- Everything is dandy, so just do it right way.
+	 --Retail code
+		powerPercent = UnitPowerPercent(self.partyid)
+		powerPercent100 = UnitPowerPercent(self.partyid, UnitPowerType(self.partyid), false, CurveConstants.ScaleTo100)
 	end
-	-- end division by 0 check
 
 	--self.statsFrame.manaBar.text:SetFormattedText("%d/%d", playermana, playermanamax)
 	TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax)
@@ -767,10 +784,18 @@ local function TPerl_Player_UpdateMana(self)
 	if (powerType >= 1 or UnitPowerMax(self.partyid, powerType) < 1) then
 		self.statsFrame.manaBar.percent:SetText(unitPower)
 	else
-		self.statsFrame.manaBar.percent:SetFormattedText(percD, powerPercent * 100)
+		if not IsRetail then
+ 		self.statsFrame.manaBar.percent:SetFormattedText(percD, powerPercent * 100)
+		else
+		 self.statsFrame.manaBar.percent:SetFormattedText(percD, powerPercent100)
+		end
 	end
 
-	self.statsFrame.manaBar.tex:SetTexCoord(0, max(0, (powerPercent)), 0, 1)
+ if not IsRetail then
+	 self.statsFrame.manaBar.tex:SetTexCoord(0, max(0, (powerPercent)), 0, 1)
+	else
+	 self.statsFrame.manaBar.tex:SetTexCoord(0, powerPercent, 0, 1)
+	end
 
 	if (not self.statsFrame.greyMana) then
 		if (pconf.values) then
@@ -837,7 +862,12 @@ local function TPerl_Player_UpdateHealth(self)
 	local partyid = self.partyid
 	local sf = self.statsFrame
 	local hb = sf.healthBar
-	local playerhealth, playerhealthmax = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid)), UnitHealthMax(partyid)
+	local playerhealth, playerhealthmax
+	if not IsRetail then
+	 playerhealth, playerhealthmax = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid)), UnitHealthMax(partyid)
+	else
+	 playerhealth, playerhealthmax = UnitHealth(partyid), UnitHealthMax(partyid)
+	end
  if IsRetail then
 	 -- Only blizz can return the inverse since no math on hp values.
 		local playerInverseHp = UnitHealthPercent(partyid, false, CurveConstants.Reverse)
@@ -846,7 +876,9 @@ local function TPerl_Player_UpdateHealth(self)
 	end
 
 	self.afk = UnitIsAFK(partyid) and conf.showAFK == 1
-
+	
+	
+ --print(partyid, playerhealth, playerhealthmax, playerInverseHp)
 	TPerl_SetHealthBar(self, playerhealth, playerhealthmax, playerInverseHp)
 	if not IsRetail then
 		--Not implemented in retail yet.
@@ -858,18 +890,32 @@ local function TPerl_Player_UpdateHealth(self)
 	end
 
 	local greyMsg
-	if (UnitIsDead(partyid)) then
-		greyMsg = TPERL_LOC_DEAD
-	elseif (UnitIsGhost(partyid)) then
-		greyMsg = TPERL_LOC_GHOST
-	elseif (UnitIsAFK("player") and conf.showAFK) then
-		greyMsg = CHAT_MSG_AFK
-	--[[elseif (conf.showFD and UnitBuff(partyid, feignDeath)) then
-		greyMsg = TPERL_LOC_FEIGNDEATHSHORT
-	elseif (UnitBuff(partyid, spiritOfRedemption)) then
-		greyMsg = TPERL_LOC_DEAD--]]
+	if not IsRetail then
+		if (UnitIsDead(partyid)) then
+			greyMsg = TPERL_LOC_DEAD
+		elseif (UnitIsGhost(partyid)) then
+			greyMsg = TPERL_LOC_GHOST
+		elseif (UnitIsAFK("player") and conf.showAFK) then
+			greyMsg = CHAT_MSG_AFK
+		--elseif (conf.showFD and UnitBuff(partyid, feignDeath)) then
+			--greyMsg = TPERL_LOC_FEIGNDEATHSHORT
+		--elseif (UnitBuff(partyid, spiritOfRedemption)) then
+			--greyMsg = TPERL_LOC_DEAD
+		end
+ else
+	 if (UnitIsDead(partyid)) then
+			greyMsg = TPERL_LOC_DEAD
+		elseif (UnitIsGhost(partyid)) then
+			greyMsg = TPERL_LOC_GHOST
+		elseif (UnitIsAFK("player") and conf.showAFK) then
+			greyMsg = CHAT_MSG_AFK
+		elseif (conf.showFD and C_UnitAuras.GetAuraDataBySpellName(partyid, feignDeath)) then
+			greyMsg = TPERL_LOC_FEIGNDEATHSHORT
+		elseif (C_UnitAuras.GetAuraDataBySpellName(partyid, 20711)) then
+			greyMsg = TPERL_LOC_DEAD
+		end
 	end
-
+	
 	if (greyMsg) then
 		if (pconf.percent) then
 			hb.percent:SetText(greyMsg)
@@ -909,23 +955,27 @@ function TPerl_PlayerStatus_OnUpdate(self, val, max)
 		local testLow = pconf.fullScreen.lowHP / 100
 		local testHigh = pconf.fullScreen.highHP / 100
 
-		if (val and max and val > 0 and max > 0) then
-			local test = val / max
+		if not IsRetail then
+		 -- I will research but unless I can compare hp in some way or tell its LOW
+			-- then we cant run this in Retail.
+			if (val and max and val > 0 and max > 0) then
+				local test = val / max
 
-			if ( test <= testLow and not TPerl_LowHealthFrame.frameFlash and not UnitIsDeadOrGhost("player")) then
-				TPerl_FrameFlash(TPerl_LowHealthFrame)
-			elseif ( (test >= testHigh and TPerl_LowHealthFrame.frameFlash) or UnitIsDeadOrGhost("player") ) then
-				TPerl_FrameFlashStop(TPerl_LowHealthFrame, "out")
-			end
-			return
-		else
-			if (not UnitOnTaxi("player")) then
-				if (isOutOfControl and not TPerl_OutOfControlFrame.frameFlash and not UnitOnTaxi("player")) then
-					TPerl_FrameFlash(TPerl_OutOfControlFrame)
-				elseif (not isOutOfControl and TPerl_OutOfControlFrame.frameFlash) then
-					TPerl_FrameFlashStop(TPerl_OutOfControlFrame, "out")
+				if ( test <= testLow and not TPerl_LowHealthFrame.frameFlash and not UnitIsDeadOrGhost("player")) then
+					TPerl_FrameFlash(TPerl_LowHealthFrame)
+				elseif ( (test >= testHigh and TPerl_LowHealthFrame.frameFlash) or UnitIsDeadOrGhost("player") ) then
+					TPerl_FrameFlashStop(TPerl_LowHealthFrame, "out")
 				end
 				return
+			else
+				if (not UnitOnTaxi("player")) then
+					if (isOutOfControl and not TPerl_OutOfControlFrame.frameFlash and not UnitOnTaxi("player")) then
+						TPerl_FrameFlash(TPerl_OutOfControlFrame)
+					elseif (not isOutOfControl and TPerl_OutOfControlFrame.frameFlash) then
+						TPerl_FrameFlashStop(TPerl_OutOfControlFrame, "out")
+					end
+					return
+				end
 			end
 		end
 	end
@@ -941,7 +991,7 @@ end
 -- TPerl_Player_OnUpdate
 function TPerl_Player_OnUpdate(self, elapsed)
 	if pconf.hitIndicator and pconf.portrait then
-		CombatFeedback_OnUpdate(self, elapsed)
+		 CombatFeedback_OnUpdate(self, elapsed)
 	end
 
 	local partyid = self.partyid
@@ -2067,6 +2117,7 @@ end
 
 -- TPerl_Player_Set_Bits()
 function TPerl_Player_Set_Bits(self)
+ --print("TPerl_Player.lua:2082")
 	if (TPerl_ArcaneBar_RegisterFrame and not self.nameFrame.castBar) then
 		TPerl_ArcaneBar_RegisterFrame(self.nameFrame, (not IsVanillaClassic and UnitHasVehicleUI("player")) and "vehicle" or "player")
 	end

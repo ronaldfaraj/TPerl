@@ -1931,11 +1931,16 @@ end
 
 -- xpHigh:OptionChange
 function xpHigh:OptionChange()
+ --print("TPerl_Highlight.lua:1933")
 	local events
 
 	local _
 	_, playerClass = UnitClass("player")
 	playerName = UnitName("player")
+
+ if IsRetail then
+	 return
+	end
 
  if not IsRetail then
 		if (conf.highlight.enable and (conf.highlight.HOT or conf.highlight.SHIELD or conf.highlight.HEAL or conf.highlight.POM)) then
@@ -2008,4 +2013,4 @@ function xpHigh:OptionChange()
 	end
 end
 
-TPerl_RegisterOptionChanger(xpHigh.OptionChange, xpHigh)
+TPerl_RegisterOptionChanger(xpHigh.OptionChange, xpHigh, "xpHigh.OptionChange")

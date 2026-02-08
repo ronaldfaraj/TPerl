@@ -220,7 +220,7 @@ function TPerl_Player_Pet_OnLoad(self)
 	TPerl_RegisterPerlFrames(self, {self.nameFrame, self.statsFrame, self.portraitFrame, self.levelFrame})
 	self.FlashFrames = {self.nameFrame, self.levelFrame, self.statsFrame, self.portraitFrame}
 
-	TPerl_RegisterOptionChanger(TPerl_Player_Pet_Set_Bits, self)
+	TPerl_RegisterOptionChanger(TPerl_Player_Pet_Set_Bits, self, "TPerl_Player_Pet_Set_Bits")
 
 	TPerl_Highlight:Register(TPerl_Player_Pet_HighlightCallback, self)
 
@@ -788,6 +788,7 @@ end
 
 -- TPerl_Player_Pet_Set_Bits
 function TPerl_Player_Pet_Set_Bits(self)
+	--print("TPerl_PlayerPet.lua:790")
 	if (not virtual) then
 		RegisterUnitWatch(self)
 	end

@@ -148,7 +148,7 @@ function TPerl_Party_Events_OnLoad(self)
 	end
 
 	self:SetScript("OnEvent", TPerl_Party_OnEvent)
-	TPerl_RegisterOptionChanger(TPerl_Party_Set_Bits)
+	TPerl_RegisterOptionChanger(TPerl_Party_Set_Bits, nil, "TPerl_Party_Set_Bits")
 	TPerl_Highlight:Register(TPerl_Party_HighlightCallback, self)
 
 	TPerl_Party_Set_Bits()
@@ -1782,9 +1782,9 @@ function TPerl_Party_Set_Bits1(self)
 			for k,v in pairs(buffs) do
 				v:ClearAllPoints()
 				if (pconf.flip) then
-					v:SetPoint("TOPRIGHT", prev, prevAnchor, -(1 + debuff), 0)
+					--v:SetPoint("TOPRIGHT", prev, prevAnchor, -(1 + debuff), 0)
 				else
-					v:SetPoint("TOPLEFT", prev, prevAnchor, 1 + debuff, 0)
+					--v:SetPoint("TOPLEFT", prev, prevAnchor, 1 + debuff, 0)
 				end
 				prev = v
 				if (pconf.flip) then
@@ -1954,6 +1954,7 @@ end
 
 -- TPerl_Party_Set_Bits
 function TPerl_Party_Set_Bits()
+	--print("TPerl_Party.lua:1956")
 	if (InCombatLockdown()) then
 		TPerl_OutOfCombatQueue[TPerl_Party_Set_Bits] = false
 		return

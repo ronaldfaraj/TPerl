@@ -457,7 +457,10 @@ local function TPerl_RegisterLDB()
     if not (LDB and LDI) then return end
 
     if not TPerlDB then TPerlDB = {} end
-    if not TPerlDB.minimap then TPerlDB.minimap = {} end
+    if not TPerlDB.minimap then
+ 				TPerlDB.minimap = {}
+					TPerlDB.minimap.enable = true
+				end
 
     local ldbSource = LDB:NewDataObject("TPerl_UnitFrames", {
         type = "launcher",
@@ -490,7 +493,7 @@ local function settingspart1(self, event)
 
 	if (not TPerlConfigNew) then
 		if (TPerlConfig_Global or TPerlConfig) then
-			TPerl_pcall(ImportOldConfigs)
+			ImportOldConfigs()
 		else
 			TPerlConfigNew = {}
 		end
@@ -500,7 +503,7 @@ local function settingspart1(self, event)
 
 	-- Variable checking only occurs for new install and version number change
 	if (not TPerlConfigNew.ConfigVersion or TPerlConfigNew.ConfigVersion ~= TPerl_VersionNumber) then
-		TPerl_pcall(TPerl_UpgradeSettings)
+		TPerl_UpgradeSettings()
 		TPerlConfigNew.ConfigVersion = TPerl_VersionNumber
 	end
 
@@ -508,13 +511,14 @@ local function settingspart1(self, event)
 	TPerl_ImportOldConfig = nil
 	TPerl_UpgradeSettings = nil
 
-	TPerl_pcall(TPerl_ValidateSettings)
+	TPerl_ValidateSettings()
 
 	TPerl_RegisterSMBarTextures()
 end
 
-local function startupCheckSettings(self,event)
+local function startupCheckSettings(self, event)
 --print("Startup Check Settings called")
+ --print(event)
 	TPerl_Init()
 	TPerl_BlizzFrameDisable = nil
 	TPerl_RegisterLDB()

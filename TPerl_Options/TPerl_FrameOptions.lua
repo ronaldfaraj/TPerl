@@ -3132,6 +3132,7 @@ end
 -- TPerl_Options_Custom_ScanForIcons
 function TPerl_Options_Custom_ScanForIcons(self)
 	local search = TPerl_Custom_ConfigNew_Search:GetText()
+	--print("search", issecretvalue(search))
 	if search and strlen(search) > 2 then
 		search = strlower(search)
 		local dbname = self.iconDB and self.iconDB
@@ -3790,9 +3791,8 @@ end
 function TPerl_LockRunes_OnConfigClick(self)
 	local checked = OptChecked("LockRunes")
 
- if TPerlSpecialPowerBarFrame then
-  TPerlSpecialPowerBarFrame:EnableMouse(not checked)
-	end
+
+ TPerlSpecialPowerBarFrame:EnableMouse(not checked)
 	if TPerlSpecialPowerBarFrame2 then
 	 TPerlSpecialPowerBarFrame2:EnableMouse(not checked)
 	end

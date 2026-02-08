@@ -62,7 +62,7 @@ function TPerl_Party_Pet_OnLoadEvents(self)
 
 	self:SetScript("OnEvent", TPerl_Party_Pet_OnEvent)
 
-	TPerl_RegisterOptionChanger(TPerl_Party_Pet_Set_Bits)
+	TPerl_RegisterOptionChanger(TPerl_Party_Pet_Set_Bits, nil, "TPerl_Party_Pet_Set_Bits")
 
 	TPerl_Highlight:Register(TPerl_Party_Pet_HighlightCallback, self)
 
