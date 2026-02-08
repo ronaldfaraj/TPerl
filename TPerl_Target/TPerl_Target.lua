@@ -310,7 +310,7 @@ function TPerl_Target_OnLoad(self, partyid)
 		self.conf = TPerlDB[partyid]
 	end
 
-	TPerl_RegisterOptionChanger(TPerl_Target_Set_Bits, self)
+	TPerl_RegisterOptionChanger(TPerl_Target_Set_Bits, self, "TPerl_Target_Set_Bits")
 
 	if (TPerl_Target and TPerl_Focus) then
 		TPerl_Target_OnLoad = nil
@@ -838,16 +838,18 @@ end
 function TPerl_Target_SetManaType(self)
 	local unitPowerMax = UnitPowerMax(self.partyid)
 
-	if (unitPowerMax == 0 or not self.conf.mana) then
-		if (self.statsFrame.manaBar:IsShown()) then
-			self.statsFrame.manaBar:Hide()
+ if not IsRetail then
+			if (unitPowerMax == 0 or not self.conf.mana) then
+				if (self.statsFrame.manaBar:IsShown()) then
+					self.statsFrame.manaBar:Hide()
 
-			if (self == TPerl_Target or self == TPerl_Focus or self == TPerl_TargetTarget or self == TPerl_FocusTarget or self == TPerl_PetTarget or self == TPerl_TargetTargetTarget) then
-				self.statsFrame:SetHeight(28 + ((conf.bar.fat or 0) * 2))
-				TPerl_StatsFrameSetup(self)
+					if (self == TPerl_Target or self == TPerl_Focus or self == TPerl_TargetTarget or self == TPerl_FocusTarget or self == TPerl_PetTarget or self == TPerl_TargetTargetTarget) then
+						self.statsFrame:SetHeight(28 + ((conf.bar.fat or 0) * 2))
+						TPerl_StatsFrameSetup(self)
+					end
+				end
+				return
 			end
-		end
-		return
 	end
 
 	TPerl_SetManaBarType(self)
@@ -879,14 +881,21 @@ function TPerl_Target_SetMana(self)
 	self.targetmanamax = unitPowerMax
 
 	-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
+	
+	--TODO: Update this to actually check the resources. We can call UnitPower(partyid, x) in a while loop till the function itself is nil. So for example:
+	-- UnitPower(partyid, 100) will almost assuredly be nil.
 	local powerPercent
-	if unitPower > 0 and unitPowerMax == 0 then -- We have current mana but max mana failed.
-		unitPowerMax = unitPower -- Make max mana at least equal to current mana
-		powerPercent = 1 -- And percent 100% cause a number divided by itself is 1, duh.
-	elseif unitPower == 0 and unitPowerMax == 0 then -- Probably doesn't use mana or is oom?
-		powerPercent = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
+ if not IsRetail then
+		if unitPower > 0 and unitPowerMax == 0 then -- We have current mana but max mana failed.
+			unitPowerMax = unitPower -- Make max mana at least equal to current mana
+			powerPercent = 1 -- And percent 100% cause a number divided by itself is 1, duh.
+		elseif unitPower == 0 and unitPowerMax == 0 then -- Probably doesn't use mana or is oom?
+			powerPercent = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
+		else
+			powerPercent = unitPower / unitPowerMax -- Everything is dandy, so just do it right way.
+		end
 	else
-		powerPercent = unitPower / unitPowerMax -- Everything is dandy, so just do it right way.
+	 powerPercent = UnitPowerPercent("player", Enum.PowerType.Mana)
 	end
 	-- end division by 0 check
 
@@ -896,7 +905,12 @@ function TPerl_Target_SetMana(self)
 	if powerType >= 1 then
 		self.statsFrame.manaBar.percent:SetText(unitPower)
 	else
-		self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)	--	TPerl_Percent[floor(100 * (unitPower / unitPowerMax))])
+		if not IsRetail then
+		 self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)	--	TPerl_Percent[floor(100 * (unitPower / unitPowerMax))])
+		else
+		 local powerPercent100 = UnitPowerPercent("target", Enum.PowerType.Mana, false, CurveConstants.ScaleTo100)
+		 self.statsFrame.manaBar.percent:SetFormattedText(percD, powerPercent100)	--	TPerl_Percent[floor(100 * (unitPower / unitPowerMax))])
+		end
 	end
 
 	TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax)
@@ -1052,9 +1066,16 @@ function TPerl_Target_UpdateHealth(self)
 		end
 	end]]
 
-	if hp and hp >= 0 and hpMax and hpMax > 0 then
-		TPerl_SetHealthBar(self, hp, hpMax)
-	end
+--	if hp and hp >= 0 and hpMax and hpMax > 0 then
+  if IsRetail then
+			-- Only blizz can return the inverse since no math on hp values.
+			local playerInverseHp = UnitHealthPercent(partyid, false, CurveConstants.Reverse)
+		else
+			local playerInverseHp = 0 -- Not used in anything but retail.
+		end
+		--print(self:GetName(), hp, hpMax, playerInverseHp)
+		TPerl_SetHealthBar(self, hp, hpMax, playerInverseHp)
+	--end
 
 	TPerl_Target_UpdateAbsorbPrediction(self)
 	TPerl_Target_UpdateHealPrediction(self)
@@ -1107,8 +1128,13 @@ function TPerl_Target_UpdateHealth(self)
 	end
 
 	if (color) then
-		if hp and hp >= 0 and hpMax and hpMax > 0 then
-			TPerl_ColourHealthBar(self, hp / hpMax)
+		if not IsRetail then
+			if hp and hp >= 0 and hpMax and hpMax > 0 then
+				TPerl_ColourHealthBar(self, hp / hpMax)
+			end
+		else
+		 local percent = UnitHealthPercent(partyid)
+		 TPerl_ColourHealthBar(self, percent)
 		end
 
 		if (self.statsFrame.greyMana) then
@@ -1123,7 +1149,13 @@ end
 -- TPerl_Target_GetHealth
 function TPerl_Target_GetHealth(self)
 	local hp, hpMax = TPerl_Unit_GetHealth(self)
-	return hp, hpMax, hpMax == 100
+	local hpMaxCheck
+	if not IsRetail then
+	 hpMaxCheck = hpMax == 100
+	else
+	 hpMaxCheck = false
+	end
+	return hp, hpMax, hpMaxCheck
 end
 
 -- TPerl_Target_Update_Combat
@@ -1884,6 +1916,7 @@ end
 
 -- TPerl_Target_Set_Bits
 function TPerl_Target_Set_Bits(self)
+ --print("TPerl_Target.lua:1886")
 	local _, playerClass = UnitClass("player")
 
 	--self.buffOptionString = nil

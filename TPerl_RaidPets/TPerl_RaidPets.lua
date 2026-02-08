@@ -304,7 +304,7 @@ function TPerl_RaidPets_OnLoad(self)
 	self:SetScript("OnEvent", TPerl_RaidPets_OnEvent)
 	--self:SetScript("OnUpdate", TPerl_RaidPets_OnUpdate)
 
-	TPerl_RegisterOptionChanger(TPerl_RaidPets_OptionActions)
+	TPerl_RegisterOptionChanger(TPerl_RaidPets_OptionActions, nil, "TPerl_RaidPets_OptionActions")
 
 	TPerl_Highlight:Register(TPerl_RaidPets_HighlightCallback, self)
 
@@ -749,6 +749,7 @@ end
 
 -- TPerl_RaidPets_OptionActions
 function TPerl_RaidPets_OptionActions()
+	--print("TPerl_RaidPets.lua:751")
 	if (InCombatLockdown()) then
 		TPerl_OutOfCombatQueue[TPerl_RaidPets_OptionActions] = true
 		return

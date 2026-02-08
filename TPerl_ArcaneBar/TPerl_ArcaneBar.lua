@@ -475,6 +475,7 @@ end
 
 -- TPerl_ArcaneBar_Set
 function TPerl_ArcaneBar_Set()
+	--print("TPerl_ArcaneBar.lua:477")
 	if (conf) then
 		for k, v in pairs(ArcaneBars) do
 			if (v.optFrame and v.optFrame.conf and v.optFrame.conf.castBar) then
@@ -549,4 +550,4 @@ function TPerl_ArcaneBar_SetUnit(self, unit)
 	end
 end
 
-TPerl_RegisterOptionChanger(TPerl_ArcaneBar_Set)
+TPerl_RegisterOptionChanger(TPerl_ArcaneBar_Set, nil, "TPerl_ArcaneBar_Set")

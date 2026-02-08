@@ -43,7 +43,6 @@ local max = max
 local min = min
 local next = next
 local pairs = pairs
-local pcall = pcall
 local print = print
 local select = select
 local setmetatable = setmetatable
@@ -414,6 +413,9 @@ local function DoRangeCheck(unit, opt)
 			range = nil
 		else--]]
 		if opt.interact then
+		 if IsRetail then
+			 return
+			end
 			if opt.interact == 6 then -- 45y
 				local checkedRange
 				range, checkedRange = UnitInRange(unit)
@@ -590,6 +592,7 @@ end
 
 -- TPerl_StartupSpellRange()
 function TPerl_StartupSpellRange()
+		--print("TPerl.lua:315")
 	local _, playerClass = UnitClass("player")
 
 	if (not TPerl_DefaultRangeSpells.ANY) then
@@ -637,7 +640,7 @@ function TPerl_StartupSpellRange()
 	--end
 end
 
-TPerl_RegisterOptionChanger(TPerl_StartupSpellRange)
+TPerl_RegisterOptionChanger(TPerl_StartupSpellRange, nil, "TPerl_StartupSpellRange")
 
 -- TPerl_StatsFrame_SetGrey
 local function TPerl_StatsFrame_SetGrey(self, r, g, b)
@@ -876,19 +879,31 @@ function TPerl_BlizzFrameDisable(self)
 end
 
 -- smoothColor
-local function smoothColor(percentage)
-	local r, g, b
-	if (percentage < 0.5) then
-		r = 1
-		g = min(1, max(0, 2 * percentage))
-		b = 0
-	else
-		g = 1
-		r = min(1, max(0, 2 * (1 - percentage)))
-		b = 0
-	end
+local function smoothColor(percentage, partyid)
+	local r, g, b, color
+	if not IsRetail then
+		if (percentage < 0.5) then
+			r = 1
+			g = min(1, max(0, 2 * percentage))
+			b = 0
+		else
+			g = 1
+			r = min(1, max(0, 2 * (1 - percentage)))
+			b = 0
+		end
+ else
+	 local curve = C_CurveUtil.CreateColorCurve()
+		curve:SetType(Enum.LuaCurveType.Linear)
+		curve:AddPoint(0.0, CreateColor(1, 0, 0))
+		curve:AddPoint(0.3, CreateColor(1, 1, 0))
+		curve:AddPoint(0.7, CreateColor(0, 1, 0))
 
-	return r, g, b
+		--local unit = "player"
+		color = UnitHealthPercent(partyid, false, curve)
+		r, g, b = color:GetRGB()
+	end
+ 
+	return r, g, b, color
 end
 
 ---------------------------------
@@ -898,7 +913,7 @@ function TPerl_SetSmoothBarColor(self, percentage)
 	if (self) then
 		local r, g, b
 		if (conf.colour.classic) then
-			r, g, b = smoothColor(percentage)
+			r, g, b = smoothColor(percentage, self.partyid)
 		else
 			local c = conf.colour.bar
 			r = min(1, max(0, c.healthEmpty.r + ((c.healthFull.r - c.healthEmpty.r) * percentage)))
@@ -906,8 +921,22 @@ function TPerl_SetSmoothBarColor(self, percentage)
 			b = min(1, max(0, c.healthEmpty.b + ((c.healthFull.b - c.healthEmpty.b) * percentage)))
 		end
 
-		self:SetStatusBarColor(r, g, b)
+  if not IsRetail then
+ 		self:SetStatusBarColor(r, g, b)
+		else
+		 --TODO: find a way to just actually color the bar keeping the texture.
+		 --self:GetStatusBarTexture():SetVertexColor(r, g, b)
+			local curve = C_CurveUtil.CreateColorCurve()
+			curve:SetType(Enum.LuaCurveType.Linear)
+			curve:AddPoint(0.0, CreateColor(1, 0, 0))
+			curve:AddPoint(0.3, CreateColor(1, 1, 0))
+			curve:AddPoint(0.7, CreateColor(0, 1, 0))
 
+			--local unit = "player"
+			local color = UnitHealthPercent(self.partyid, false, curve)
+			--self:SetStatusBarColor(color:GetRGB())
+		end
+		
 		if (self.bg) then
 			self.bg:SetVertexColor(r, g, b, 0.25)
 		end
@@ -936,11 +965,12 @@ end
 TPerl_ResetBarColourCache()
 
 -- TPerl_ColourHealthBar
-function TPerl_ColourHealthBar(self, healthPct, partyid)
+function TPerl_ColourHealthBar(self, healthPct)
 	if (not partyid) then
 		partyid = self.partyid
 	end
 	local bar = self.statsFrame.healthBar
+	bar.partyid = partyid
 	if (--[[string.find(partyid, "raid") and ]]conf.colour.classbar and UnitIsPlayer(partyid)) then
 		local _, class = UnitClass(partyid)
 		if (class) then
@@ -955,6 +985,21 @@ function TPerl_ColourHealthBar(self, healthPct, partyid)
 		end
 	end
 
+ --Fix AFK Bug. Check Done in incorrect spot. Will likely move later.
+ if UnitIsAFK(partyid) then
+		bar:SetStatusBarColor(0.2, 0.2, 0.2, 0.7)
+	else
+		if not conf.colour.bar.healthFull then
+			conf.colour.bar.healthFull = { }
+			conf.colour.bar.healthFull.r = 0
+			conf.colour.bar.healthFull.g = 1
+			conf.colour.bar.healthFull.b = 0
+			conf.colour.bar.healthFull.a = 1
+		end
+
+		bar:SetStatusBarColor(conf.colour.bar.healthFull.r, conf.colour.bar.healthFull.g, conf.colour.bar.healthFull.b, conf.colour.bar.healthFull.a)
+	end
+ 
 	TPerl_SetSmoothBarColor(bar, healthPct)
 end
 --local TPerl_ColourHealthBar = TPerl_ColourHealthBar
@@ -1017,59 +1062,64 @@ function TPerl_SetValuedText(self, unitHealth, unitHealthMax, suffix)
 			self:SetFormattedText("%d/%d%s", unitHealth, unitHealthMax, suffix or "")
 		end
 	else
-		if unitHealthMax >= 1000000000 then
-			if abs(unitHealth) >= 1000000000 then
-				-- 1.23G/1.23G
-				self:SetFormattedText("%.2f%s/%.2f%s%s", unitHealth / 1000000000, veryhugeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
-			elseif abs(unitHealth) >= 10000000 then
-				-- 12.3M/1.23G
-				self:SetFormattedText("%.1f%s/%.2f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
-			elseif abs(unitHealth) >= 1000000 then
-				-- 1.23M/1.23G
-				self:SetFormattedText("%.2f%s/%.2f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
-			elseif abs(unitHealth) >= 100000 then
-				-- 123.4K/1.23G
-				self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
-			else
-				-- 12345/1.23G
-				self:SetFormattedText("%d/%.2f%s%s", unitHealth, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
-			end
-		elseif unitHealthMax >= 10000000 then
-			if abs(unitHealth) >= 10000000 then
-				-- 12.3M/12.3M
-				self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			elseif abs(unitHealth) >= 1000000 then
-				-- 1.23M/12.3M
-				self:SetFormattedText("%.2f%s/%.1f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			elseif abs(unitHealth) >= 100000 then
-				-- 123.4K/12.3M
-				self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			else
-				-- 12345/12.3M
-				self:SetFormattedText("%d/%.1f%s%s", unitHealth, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			end
-		elseif unitHealthMax >= 1000000 then
-			if abs(unitHealth) >= 1000000 then
-				-- 1.23M/1.23M
-				self:SetFormattedText("%.2f%s/%.2f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			elseif abs(unitHealth) >= 100000 then
-				-- 123.4K/1.23M
-				self:SetFormattedText("%.1f%s/%.2f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			else
-				-- 12345/1.23M
-				self:SetFormattedText("%d/%.2f%s%s", unitHealth, unitHealthMax / 1000000, hugeNumTag, suffix or "")
-			end
-		elseif unitHealthMax >= 100000 then
-			if abs(unitHealth) >= 100000 then
-				-- 123.4K/123.4K
-				self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000, largeNumTag, suffix or "")
-			else
-				-- 12345/123.4K
-				self:SetFormattedText("%d/%.1f%s%s", unitHealth, unitHealthMax / 1000, largeNumTag, suffix or "")
-			end
+	 if not IsRetail then
+				if unitHealthMax >= 1000000000 then
+					if abs(unitHealth) >= 1000000000 then
+						-- 1.23G/1.23G
+						self:SetFormattedText("%.2f%s/%.2f%s%s", unitHealth / 1000000000, veryhugeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
+					elseif abs(unitHealth) >= 10000000 then
+						-- 12.3M/1.23G
+						self:SetFormattedText("%.1f%s/%.2f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
+					elseif abs(unitHealth) >= 1000000 then
+						-- 1.23M/1.23G
+						self:SetFormattedText("%.2f%s/%.2f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
+					elseif abs(unitHealth) >= 100000 then
+						-- 123.4K/1.23G
+						self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
+					else
+						-- 12345/1.23G
+						self:SetFormattedText("%d/%.2f%s%s", unitHealth, unitHealthMax / 1000000000, veryhugeNumTag, suffix or "")
+					end
+				elseif unitHealthMax >= 10000000 then
+					if abs(unitHealth) >= 10000000 then
+						-- 12.3M/12.3M
+						self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					elseif abs(unitHealth) >= 1000000 then
+						-- 1.23M/12.3M
+						self:SetFormattedText("%.2f%s/%.1f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					elseif abs(unitHealth) >= 100000 then
+						-- 123.4K/12.3M
+						self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					else
+						-- 12345/12.3M
+						self:SetFormattedText("%d/%.1f%s%s", unitHealth, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					end
+				elseif unitHealthMax >= 1000000 then
+					if abs(unitHealth) >= 1000000 then
+						-- 1.23M/1.23M
+						self:SetFormattedText("%.2f%s/%.2f%s%s", unitHealth / 1000000, hugeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					elseif abs(unitHealth) >= 100000 then
+						-- 123.4K/1.23M
+						self:SetFormattedText("%.1f%s/%.2f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					else
+						-- 12345/1.23M
+						self:SetFormattedText("%d/%.2f%s%s", unitHealth, unitHealthMax / 1000000, hugeNumTag, suffix or "")
+					end
+				elseif unitHealthMax >= 100000 then
+					if abs(unitHealth) >= 100000 then
+						-- 123.4K/123.4K
+						self:SetFormattedText("%.1f%s/%.1f%s%s", unitHealth / 1000, largeNumTag, unitHealthMax / 1000, largeNumTag, suffix or "")
+					else
+						-- 12345/123.4K
+						self:SetFormattedText("%d/%.1f%s%s", unitHealth, unitHealthMax / 1000, largeNumTag, suffix or "")
+					end
+				else
+					-- 12345/12345
+					self:SetFormattedText("%d/%d%s", unitHealth, unitHealthMax, suffix or "")
+				end
 		else
-			-- 12345/12345
-			self:SetFormattedText("%d/%d%s", unitHealth, unitHealthMax, suffix or "")
+		  --print("Set: " .. AbbreviateNumbers(unitHealth) .. "/" .. AbbreviateNumbers(unitHealthMax) .. (suffix or ""))
+		  self:SetText(AbbreviateNumbers(unitHealth) .. "/" .. AbbreviateNumbers(unitHealthMax) .. (suffix or ""))
 		end
 	end
 end
@@ -1079,6 +1129,7 @@ local SetValuedText = TPerl_SetValuedText
 function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 	local bar = self.statsFrame.healthBar
 	bar:SetMinMaxValues(0, Max)
+	
 	local percent
 	if not IsRetail then
 		if hp >= 1 and Max == 0 then -- For some dumb reason max HP is 0, normal HP is not, so lets use normal HP as max
@@ -1098,7 +1149,8 @@ function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 			bar.tex:SetTexCoord(0, max(0, percent), 0, 1)
 		end
 	else
-	 percent = UnitHealthPercent(partyid, false)
+	 percent = UnitHealthPercent(self.partyid)
+	 percent100 = UnitHealthPercent(self.partyid, false, CurveConstants.ScaleTo100)
 		if (conf.bar.inverse) then
 			bar:SetValue( hpInverse)
 			bar.tex:SetTexCoord(0, hpInverse, 0, 1)
@@ -1106,92 +1158,127 @@ function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 			bar:SetValue(hp)
 			bar.tex:SetTexCoord(0, percent, 0, 1)
 		end
+		
 	end
 
+ --TODO: STOP using the below function or update it to color curves.
 	TPerl_ColourHealthBar(self, percent)
+	
+ --Percent Display.
 	if (bar.percent) then
-		if (self.conf.healerMode and self.conf.healerMode.enable and self.conf.healerMode.type == 2) then
-			--bar.percent:SetText(hp - Max)
-			local health = hp - Max
-			local locale = GetLocale()
-			if locale == "zhCN" or locale == "zhTW" then
-				if (abs(health) >= 1000000000000) then
-					bar.percent:SetFormattedText("%.0f%s", health / 1000000000000, veryhugeNumTag)
-				elseif (abs(health) >= 100000000) then
-					bar.percent:SetFormattedText("%.0f%s", health / 100000000, hugeNumTag)
-				elseif (abs(health) >= 1000000) then
-					bar.percent:SetFormattedText("%.0f%s", health / 10000, largeNumTag)
-				elseif (abs(health) >= 1000) then
-					bar.percent:SetFormattedText("%.1f%s", health / 10000, largeNumTag)
-				else
-					bar.percent:SetFormattedText("%d", health)
-				end
-			else
-				if (abs(health) >= 10000000000) then
-					bar.percent:SetFormattedText("%.0f%s", health / 1000000000, veryhugeNumTag)
-				elseif (abs(health) >= 1000000000) then
-					bar.percent:SetFormattedText("%.1f%s", health / 1000000000, veryhugeNumTag)
-				elseif (abs(health) >= 10000000) then
-					bar.percent:SetFormattedText("%.0f%s", health / 1000000, hugeNumTag)
-				elseif (abs(health) >= 1000000) then
-					bar.percent:SetFormattedText("%.1f%s", health / 1000000, hugeNumTag)
-				elseif (abs(health) >= 10000) then
-					bar.percent:SetFormattedText("%.0f%s", health / 1000, largeNumTag)
-				elseif (abs(health) >= 1000) then
-					bar.percent:SetFormattedText("%.1f%s", health / 1000, largeNumTag)
-				else
-					bar.percent:SetFormattedText("%d", health)
-				end
-			end
-		else
-			local show = percent * 100
-			if (show < 10) then
-				bar.percent:SetFormattedText(perc1F or "%.1f%%", percent == 1 and 100 or show + 0.05)
-			else
-				bar.percent:SetFormattedText(percD or "%d%%", percent == 1 and 100 or show + 0.5)
-			end
-		end
+	  --if not IsRetail then
+					if (self.conf.healerMode and self.conf.healerMode.enable and self.conf.healerMode.type == 2) then
+									--bar.percent:SetText(hp - Max)
+									if not IsRetail then	
+													local health = hp - Max
+													local locale = GetLocale()
+													if locale == "zhCN" or locale == "zhTW" then
+																	if (abs(health) >= 1000000000000) then
+																		bar.percent:SetFormattedText("%.0f%s", health / 1000000000000, veryhugeNumTag)
+																	elseif (abs(health) >= 100000000) then
+																		bar.percent:SetFormattedText("%.0f%s", health / 100000000, hugeNumTag)
+																	elseif (abs(health) >= 1000000) then
+																		bar.percent:SetFormattedText("%.0f%s", health / 10000, largeNumTag)
+																	elseif (abs(health) >= 1000) then
+																		bar.percent:SetFormattedText("%.1f%s", health / 10000, largeNumTag)
+																	else
+																		bar.percent:SetFormattedText("%d", health)
+																	end
+													else
+																	if (abs(health) >= 10000000000) then
+																		bar.percent:SetFormattedText("%.0f%s", health / 1000000000, veryhugeNumTag)
+																	elseif (abs(health) >= 1000000000) then
+																		bar.percent:SetFormattedText("%.1f%s", health / 1000000000, veryhugeNumTag)
+																	elseif (abs(health) >= 10000000) then
+																		bar.percent:SetFormattedText("%.0f%s", health / 1000000, hugeNumTag)
+																	elseif (abs(health) >= 1000000) then
+																		bar.percent:SetFormattedText("%.1f%s", health / 1000000, hugeNumTag)
+																	elseif (abs(health) >= 10000) then
+																		bar.percent:SetFormattedText("%.0f%s", health / 1000, largeNumTag)
+																	elseif (abs(health) >= 1000) then
+																		bar.percent:SetFormattedText("%.1f%s", health / 1000, largeNumTag)
+																	else
+																		bar.percent:SetFormattedText("%d", health)
+																	end
+													end
+									else
+													-- unsure what this does yet.
+													-- Blizz may have nuked this and the setting for hp display might be handled in the client settings.
+													-- TODO: Investigate.
+													local health = hp
+													bar.percent:SetFormattedText("%d", health)
+									end
+					else
+									if not IsRetail then
+													-- Can only do math outside of retail.
+													local show = percent * 100
+													if (show < 10) then
+																	bar.percent:SetFormattedText(perc1F or "%.1f%%", percent == 1 and 100 or show + 0.05)
+													else
+																	bar.percent:SetFormattedText(percD or "%d%%", percent == 1 and 100 or show + 0.5)
+													end
+									else
+													-- Otherwise we have to trust blizzard.
+													-- also it should already be in range of 0 to 100
+													local show = percent100
+														-- Cant do show math.
+													bar.percent:SetFormattedText(percD or "%d%%", percent100)
+									end
+					end
+					
+					-- End Not isRetail
+				--else
+				 
+			--end
 	end
 
 	if (bar.text) then
-		local hbt = bar.text
-		if (self.conf.healerMode.enable and self.conf.healerMode.type ~= 2) then
-			local health = hp - Max
-			if (self.conf.healerMode.type == 1) then
-				SetValuedText(hbt, health, Max)
-			else
-				local locale = GetLocale()
-				if locale == "zhCN" or locale == "zhTW" then
-					if (abs(health) >= 1000000000000) then
-						hbt:SetFormattedText("%.2f%s", health / 1000000000000, veryhugeNumTag)
-					elseif (abs(health) >= 1000000000) then
-						hbt:SetFormattedText("%.0f%s", health / 100000000, hugeNumTag)
-					elseif (abs(health) >= 100000000) then
-						hbt:SetFormattedText("%.1f%s", health / 100000000, hugeNumTag)
-					elseif (abs(health) >= 1000000) then
-						hbt:SetFormattedText("%.0f%s", health / 10000, largeNumTag)
-					elseif (abs(health) >= 100000) then
-						hbt:SetFormattedText("%.1f%s", health / 10000, largeNumTag)
-					else
-						hbt:SetFormattedText("%d", health)
-					end
-				else
-					if (abs(health) >= 1000000000) then
-						hbt:SetFormattedText("%.2f%s", health / 1000000000, veryhugeNumTag)
-					elseif (abs(health) >= 10000000) then
-						hbt:SetFormattedText("%.1f%s", health / 1000000, hugeNumTag)
-					elseif (abs(health) >= 1000000) then
-						hbt:SetFormattedText("%.2f%s", health / 1000000, hugeNumTag)
-					elseif (abs(health) >= 100000) then
-						hbt:SetFormattedText("%.1f%s", health / 1000, largeNumTag)
-					else
-						hbt:SetFormattedText("%d", health)
-					end
-				end
-			end
-		else
-			SetValuedText(hbt, hp, Max)
-		end
+					local hbt = bar.text
+						--if not IsRetail then		
+							if (self.conf.healerMode.enable and self.conf.healerMode.type ~= 2) then
+										if not IsRetail then
+														local health = hp - Max
+														if (self.conf.healerMode.type == 1) then
+																		SetValuedText(hbt, health, Max)
+														else
+																		local locale = GetLocale()
+																		if locale == "zhCN" or locale == "zhTW" then
+																					if (abs(health) >= 1000000000000) then
+																						hbt:SetFormattedText("%.2f%s", health / 1000000000000, veryhugeNumTag)
+																					elseif (abs(health) >= 1000000000) then
+																						hbt:SetFormattedText("%.0f%s", health / 100000000, hugeNumTag)
+																					elseif (abs(health) >= 100000000) then
+																						hbt:SetFormattedText("%.1f%s", health / 100000000, hugeNumTag)
+																					elseif (abs(health) >= 1000000) then
+																						hbt:SetFormattedText("%.0f%s", health / 10000, largeNumTag)
+																					elseif (abs(health) >= 100000) then
+																						hbt:SetFormattedText("%.1f%s", health / 10000, largeNumTag)
+																					else
+																						hbt:SetFormattedText("%d", health)
+																					end
+																		else
+																						if (abs(health) >= 1000000000) then
+																							hbt:SetFormattedText("%.2f%s", health / 1000000000, veryhugeNumTag)
+																						elseif (abs(health) >= 10000000) then
+																							hbt:SetFormattedText("%.1f%s", health / 1000000, hugeNumTag)
+																						elseif (abs(health) >= 1000000) then
+																							hbt:SetFormattedText("%.2f%s", health / 1000000, hugeNumTag)
+																						elseif (abs(health) >= 100000) then
+																							hbt:SetFormattedText("%.1f%s", health / 1000, largeNumTag)
+																						else
+																							hbt:SetFormattedText("%d", health)
+																						end
+																		end
+														end
+										else
+														SetValuedText(hbt, hp, Max)
+										end
+							else
+							    --if IsRetail then
+											   SetValuedText(hbt, hp, Max)
+											--end
+					  end
+					--end
 	end
 	--TPerl_SetExpectedHealth(self)
 end
@@ -3056,7 +3143,7 @@ end
 -- WieghAnchor(self, at)
 local function WieghAnchor(self)
 	if (not self.TOPLEFT or self.conf.flip ~= self.lastFlip or self.conf.buffs.above ~= self.lastAbove) then
-		self.lastFlip = self.conf.flip
+		self.lastFlip = self.conf.flip or false
 		self.lastAbove = self.conf.buffs.above
 
 		local left, right, top, bottom
@@ -3092,6 +3179,7 @@ local function TPerl_Unit_BuffPositionsType(self, list, useSmallStart, buffSizeB
 	end
 	local above = self.conf.buffs.above
 	local colPoint, curRow, rowsHeight = 0, 1, 0
+	--print(useSmallStart, self.buffSpacing.smallRowWidth, self.buffSpacing.rowWidth)
 	local rowSize = (useSmallStart and self.buffSpacing.smallRowWidth) or self.buffSpacing.rowWidth
 	local maxRows = self.conf.buffs.rows or 99
 	local decrementMaxRowsIfLastIsBig -- Descriptive variable names ftw... If only upvalues took no actual memory space for the name... :(
@@ -3224,9 +3312,16 @@ end
 
 -- TPerl_Unit_BuffPositions
 function TPerl_Unit_BuffPositions(self, buffList1, buffList2, size1, size2)
-	local optMix = format("%d%d%d%d%d%d%d", self.perlBuffs or 0, self.perlDebuffs or 0, self.perlBuffsMine or 0, self.perlDebuffsMine or 0, UnitCanAttack("player", self.partyid) and 1 or 0, (UnitPowerMax(self.partyid) > 0) and 1 or 0, (self.creatureTypeFrame and self.creatureTypeFrame:IsVisible()) and 1 or 0)
+	local optMix
+	if not IsRetail then
+	 optMix = format("%d%d%d%d%d%d%d", self.perlBuffs or 0, self.perlDebuffs or 0, self.perlBuffsMine or 0, self.perlDebuffsMine or 0, UnitCanAttack("player", self.partyid) and 1 or 0, (UnitPowerMax(self.partyid) > 0) and 1 or 0, (self.creatureTypeFrame and self.creatureTypeFrame:IsVisible()) and 1 or 0)
+	else
+	local optMix = format("%d%d%d%d%d%d%d", self.perlBuffs or 0, self.perlDebuffs or 0, self.perlBuffsMine or 0, self.perlDebuffsMine or 0, UnitCanAttack("player", self.partyid) and 1 or 0, 0, (self.creatureTypeFrame and self.creatureTypeFrame:IsVisible()) and 1 or 0)
+	end
 	if (optMix ~= self.buffOptMix) then
-		WieghAnchor(self)
+		if self.partyid ~= "player" then
+		 WieghAnchor(self)
+		end
 
 		local buffsFirst = self.buffFrame.buff == buffList1
 
@@ -3768,7 +3863,7 @@ end
 --This function sucks, it needs reworking so it self corrects /0 problems here. But i haven't quite figured out how to approach it here yet. So i just fix stuff at sethealth functions.
 function TPerl_Unit_GetHealth(self)
 	local partyid = self.partyid
-	local hp, hpMax = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid)), UnitHealthMax(partyid)
+	local hp, hpMax = UnitHealth(partyid), UnitHealthMax(partyid)
  if not IsRetail then
 		if (hp > hpMax) then
 			if (UnitIsGhost(partyid)) then
@@ -3780,16 +3875,23 @@ function TPerl_Unit_GetHealth(self)
 			end
 		end
  else
+	  -- Do Nothing. This code logic is not needed.
+			--[[
 	 if (UnitIsGhost(partyid)) then
-				hp = 1
-			elseif UnitIsDead(partyid) then
-				hp = 0
-			else
-				hp = hpMax
-			end
+			hp = 1
+		elseif UnitIsDead(partyid) then
+			hp = 0
+		else
+			hp = hpMax
+		end
+		]]--
 	end
 	
-	return hp or 0, hpMax or 1, (hpMax == 100)
+	if not IsRetail then
+	 return hp or 0, hpMax or 1, (hpMax == 100)
+	else
+	 return hp, hpMax, false
+	end
 end
 
 -- TPerl_Unit_OnEnter
@@ -4140,48 +4242,59 @@ function TPerl_SetExpectedAbsorbs(self)
 		if not unit then
 			unit = self:GetParent().targetid
 		end
+		
+		if not IsRetail then
+		 local amount = not IsClassic and UnitGetTotalAbsorbs(unit)
+			
+			if (amount and amount > 0 and not UnitIsDeadOrGhost(unit)) then
+				local healthMax = UnitHealthMax(unit)
+				local health = UnitIsGhost(unit) and 1 or (UnitIsDead(unit) and 0 or UnitHealth(unit))
 
-		local amount = not IsClassic and UnitGetTotalAbsorbs(unit)
-		if (amount and amount > 0 and not UnitIsDeadOrGhost(unit)) then
-			local healthMax = UnitHealthMax(unit)
-			local health = UnitIsGhost(unit) and 1 or (UnitIsDead(unit) and 0 or UnitHealth(unit))
+				if UnitIsAFK(unit) then
+					bar:SetStatusBarColor(0.2, 0.2, 0.2, 0.7)
+				else
+					if not conf.colour.bar.absorb then
+						conf.colour.bar.absorb = { }
+						conf.colour.bar.absorb.r = 0.14
+						conf.colour.bar.absorb.g = 0.33
+						conf.colour.bar.absorb.b = 0.7
+						conf.colour.bar.absorb.a = 0.7
+					end
 
-			if UnitIsAFK(unit) then
-				bar:SetStatusBarColor(0.2, 0.2, 0.2, 0.7)
-			else
-				if not conf.colour.bar.absorb then
-					conf.colour.bar.absorb = { }
-					conf.colour.bar.absorb.r = 0.14
-					conf.colour.bar.absorb.g = 0.33
-					conf.colour.bar.absorb.b = 0.7
-					conf.colour.bar.absorb.a = 0.7
+					bar:SetStatusBarColor(conf.colour.bar.absorb.r, conf.colour.bar.absorb.g, conf.colour.bar.absorb.b, conf.colour.bar.absorb.a)
 				end
 
-				bar:SetStatusBarColor(conf.colour.bar.absorb.r, conf.colour.bar.absorb.g, conf.colour.bar.absorb.b, conf.colour.bar.absorb.a)
-			end
+				bar:Show()
+				bar:SetMinMaxValues(0, healthMax)
 
-			bar:Show()
-			bar:SetMinMaxValues(0, healthMax)
+				local healthBar
+				if self.statsFrame and self.statsFrame.healthBar then
+					healthBar = self.statsFrame.healthBar
+				else
+					healthBar = self.healthBar
+				end
+				local min, max = healthBar:GetMinMaxValues()
+				local position = ((max - healthBar:GetValue()) / max) * healthBar:GetWidth()
 
-			local healthBar
-			if self.statsFrame and self.statsFrame.healthBar then
-				healthBar = self.statsFrame.healthBar
-			else
-				healthBar = self.healthBar
-			end
-			local min, max = healthBar:GetMinMaxValues()
-			local position = ((max - healthBar:GetValue()) / max) * healthBar:GetWidth()
+				if healthBar:GetWidth() <= 0 or healthBar:GetWidth() == position then
+					return
+				end
 
-			if healthBar:GetWidth() <= 0 or healthBar:GetWidth() == position then
+				bar:SetValue(amount * (healthBar:GetWidth() / (healthBar:GetWidth() - position)))
+
+				bar:SetPoint("TopRight", healthBar, "TopRight", -position, 0)
+				bar:SetPoint("BottomRight", healthBar, "BottomRight", -position, 0)
 				return
 			end
-
-			bar:SetValue(amount * (healthBar:GetWidth() / (healthBar:GetWidth() - position)))
-
-			bar:SetPoint("TopRight", healthBar, "TopRight", -position, 0)
-			bar:SetPoint("BottomRight", healthBar, "BottomRight", -position, 0)
-			return
+		else
+		 --TODO: Figure this out.
+			--This is the area it would display absorbs incoming.
+			--Will likely require creating and updating a third bar just under the HP bar.
+			--This is because absorbs by definition imply additional health not taking away.
+			--The exception is the aborbing of healing to the target. I am taking this section to mean damage absorbs.
 		end
+		
+		
 		bar:Hide()
 	end
 end
@@ -4232,47 +4345,80 @@ end
 
 -- TPerl_SetExpectedHealth
 function TPerl_SetExpectedHealth(self)
-	local bar
-	if self.statsFrame and self.statsFrame.expectedHealth then
-		bar = self.statsFrame.expectedHealth
-	else
-		bar = self.expectedHealth
-	end
-	if (bar) then
-		local unit = self.partyid
-
-		if not unit then
-			unit = self:GetParent().targetid
-		end
-
-		local amount
-		if IsVanillaClassic then
-			local guid = UnitGUID(unit)
-			amount = (HealComm:GetHealAmount(guid, HealComm.CASTED_HEALS, GetTime() + 3) or 0) * HealComm:GetHealModifier(guid)
-		else
-			amount = UnitGetIncomingHeals(unit)
-		end
-		if (amount and amount > 0 and not UnitIsDeadOrGhost(unit)) then
-			local healthMax = UnitHealthMax(unit)
-			local health = UnitIsGhost(unit) and 1 or (UnitIsDead(unit) and 0 or UnitHealth(unit))
-			if not conf.colour.bar.healprediction then
-				conf.colour.bar.healprediction = { }
-				conf.colour.bar.healprediction.r = 0
-				conf.colour.bar.healprediction.g = 1
-				conf.colour.bar.healprediction.b = 1
-				conf.colour.bar.healprediction.a = 1
+			local bar
+			if self.statsFrame and self.statsFrame.expectedHealth then
+				bar = self.statsFrame.expectedHealth
+			else
+				bar = self.expectedHealth
 			end
+	
+	
+					if (bar) then
+										local unit = self.partyid
 
-			bar:SetStatusBarColor(conf.colour.bar.healprediction.r, conf.colour.bar.healprediction.g, conf.colour.bar.healprediction.b, conf.colour.bar.healprediction.a)
+										if not unit then
+											unit = self:GetParent().targetid
+										end
 
-			bar:Show()
-			bar:SetMinMaxValues(0, healthMax)
-			bar:SetValue(min(healthMax, health + amount))
+										local amount
+										if IsVanillaClassic then
+											local guid = UnitGUID(unit)
+											amount = (HealComm:GetHealAmount(guid, HealComm.CASTED_HEALS, GetTime() + 3) or 0) * HealComm:GetHealModifier(guid)
+										else
+											amount = UnitGetIncomingHeals(unit)
+										end
+										
+										
+										if IsRetail then
+								
+															--[[
+															--DOES NOT WORK IN RETAIL ANYMORE. RIP
+															if (amount and not UnitIsDeadOrGhost(unit)) then
+																local healthMax = UnitHealthMax(unit)
+																local health = UnitHealth(unit)
+																if not conf.colour.bar.healprediction then
+																	conf.colour.bar.healprediction = { }
+																	conf.colour.bar.healprediction.r = 0
+																	conf.colour.bar.healprediction.g = 1
+																	conf.colour.bar.healprediction.b = 1
+																	conf.colour.bar.healprediction.a = 1
+																end
 
-			return
-		end
-		bar:Hide()
-	end
+																bar:SetStatusBarColor(conf.colour.bar.healprediction.r, conf.colour.bar.healprediction.g, conf.colour.bar.healprediction.b, conf.colour.bar.healprediction.a)
+
+																bar:Show()
+																bar:SetMinMaxValues(0, healthMax)
+																bar:SetValue(min(healthMax, amount))
+															end 
+															]]--
+															
+															--TODO: Rewrite using: UnitHealth(unit, true) -- <-- the true uses blizzards predicted health amount instead.
+
+														return
+										else
+														if (amount and amount > 0 and not UnitIsDeadOrGhost(unit)) then
+																			local healthMax = UnitHealthMax(unit)
+																			local health = UnitIsGhost(unit) and 1 or (UnitIsDead(unit) and 0 or UnitHealth(unit))
+																			if not conf.colour.bar.healprediction then
+																				conf.colour.bar.healprediction = { }
+																				conf.colour.bar.healprediction.r = 0
+																				conf.colour.bar.healprediction.g = 1
+																				conf.colour.bar.healprediction.b = 1
+																				conf.colour.bar.healprediction.a = 1
+																			end
+
+																			bar:SetStatusBarColor(conf.colour.bar.healprediction.r, conf.colour.bar.healprediction.g, conf.colour.bar.healprediction.b, conf.colour.bar.healprediction.a)
+
+																			bar:Show()
+																			bar:SetMinMaxValues(0, healthMax)
+																			bar:SetValue(min(healthMax, health + amount))
+
+																			return
+															end
+											
+															bar:Hide()
+											end
+							end
 end
 
 -- Threat Display

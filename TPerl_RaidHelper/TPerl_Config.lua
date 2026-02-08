@@ -9,6 +9,7 @@ function TPerl_Message(...)
 end
 
 function TPerl_SetupFrames()
+ --print("TPerl_Config.lua:11")
 
 	local function ValidAlpha(alpha)
 		alpha = tonumber(alpha)
@@ -185,7 +186,7 @@ function TPerl_Startup()
 	TPerl_RaidHelper_Frame_TitleBar_Pin:SetButtonTex()
 
 	if (TPerl_RegisterOptionChanger) then
-		TPerl_RegisterOptionChanger(TPerl_SetupFrames)
+		TPerl_RegisterOptionChanger(TPerl_SetupFrames, nil, "TPerl_SetupFrames")
 	end
 end
 

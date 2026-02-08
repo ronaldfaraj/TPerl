@@ -731,7 +731,7 @@ function Events:VARIABLES_LOADED()
 	conf = TPerlConfigHelper
 	TPerl_RaidHelperCheck:Show()		-- TPerl_EnableDisable()
 
-	TPerl_RegisterOptionChanger(TPerl_SetFrameSizes)
+	TPerl_RegisterOptionChanger(TPerl_SetFrameSizes, nil, "TPerl_SetFrameSizes")
 	TPerl_SetFrameSizes()
 
 	Events.VARIABLES_LOADED = nil
@@ -1327,6 +1327,7 @@ end
 
 -- TPerl_SetFrameSizes
 function TPerl_SetFrameSizes()
+	--print("TPerl_RaidHelper.lua:1329")
 	conf = TPerlConfigHelper
 	local tanks = MainTankCount
 

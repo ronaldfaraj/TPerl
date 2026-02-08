@@ -109,7 +109,7 @@ function TPerl_Player_Buffs_Position(self)
 			end
 		end
 
-		if (pconf.buffs.above) then --and (not IsTBCAnni) then
+		if (pconf.buffs.above) and (not IsTBCAnni) then
 			self.debuffFrame:SetPoint("BOTTOMLEFT", self.buffFrame, "TOPLEFT", 0, 2)
 		else
 			self.debuffFrame:SetPoint("TOPLEFT", self.buffFrame, "BOTTOMLEFT", 0, -2)
@@ -119,8 +119,9 @@ function TPerl_Player_Buffs_Position(self)
 	end
 end
 
--- TPerl_Player_BuffSetup hideBlizzard
+-- TPerl_Player_BuffSetup
 function TPerl_Player_BuffSetup(self)
+ --print("Started TPerl_Player_BuffSetup")
 	if (not self) then
 		return
 	end
@@ -189,30 +190,22 @@ function TPerl_Player_BuffSetup(self)
 	if (pconf.buffs.hideBlizzard) then
 		BuffFrame:UnregisterEvent("UNIT_AURA")
 		BuffFrame:Hide()
-		if IsTBCAnni then
-		 --Hide Debuffs. TODO: Check other editions for the possible presence of this.
-			--Unsure why they brought this back. It was not present even in Retail. And TBC was basically Retail but only TBC features.
-		 DebuffFrame:UnregisterEvent("UNIT_AURA")
-		 DebuffFrame:Hide()
-		end
 		if (not IsRetail) and (not IsTBCAnni) then
 			TemporaryEnchantFrame:Hide()
 		end
 	else
 		BuffFrame:Show()
 		BuffFrame:RegisterEvent("UNIT_AURA")
-		if IsTBCAnni then
-		 --Hide Debuffs. TODO: Check other editions like classic classic if it exists.
-		 DebuffFrame:Show()
-		 DebuffFrame:RegisterEvent("UNIT_AURA")
-		end
 		if not IsRetail and (not IsTBCAnni) then
 			TemporaryEnchantFrame:Show()
 		end
 	end
+	--print("Leaving TPerl_Player_BuffSetup")
 end
 
 local function TPerl_Player_Buffs_Set_Bits(self)
+ --print("TPerl_PlayerBuffs.lua:204")
+	--print("Starting TPerl_Player_Buffs_Set_Bits")
 	if (InCombatLockdown()) then
 		TPerl_OutOfCombatQueue[TPerl_Player_Buffs_Set_Bits] = self
 		return
@@ -247,6 +240,7 @@ local function TPerl_Player_Buffs_Set_Bits(self)
 	end
 
 	TPerl_Player_Buffs_Position(self)
+	--print("Leaving TPerl_Player_Buffs_Set_Bits")
 end
 
 -- AuraButton_OnUpdate
@@ -470,4 +464,4 @@ function TPerl_PlayerBuffs_OnLoad(self)
 end
 
 
-TPerl_RegisterOptionChanger(TPerl_Player_Buffs_Set_Bits, TPerl_Player)
+TPerl_RegisterOptionChanger(TPerl_Player_Buffs_Set_Bits, TPerl_Player, "TPerl_Player_Buffs_Set_Bits")

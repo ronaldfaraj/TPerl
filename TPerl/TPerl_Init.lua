@@ -199,17 +199,36 @@ function TPerl_SetAllFrames()
 	TPerl_SetHighlights()
 end
 
+--[[
 -- TPerl_pcall
-function TPerl_pcall(...)
-	local success, error = pcall(...)
-	if (not success) then
-		errorCount = errorCount + 1
-		if (not doneOptions) then
-			TPerl_Notice("Error:"..error)
-		end
-		geterrorhandler()(error)
+function TPerl_pcall(func, ...)
+	-- func is usually the function being called; capture its debug info
+	local fname = "<unknown>"
+	local fsrc  = "<unknown>"
+	if type(func) == "function" and debug and debug.getinfo then
+		local info = debug.getinfo(func, "nS")
+		fname = info.name or "<anon>"
+		fsrc  = (info.short_src) .. ":" .. tostring(info.linedefined)
 	end
+
+	local success, err = pcall(func, ...)
+	if not success then
+		errorCount = (errorCount or 0) + 1
+
+
+		print("TPerl ERROR (pcall):", tostring(err))
+		print("  while calling:", fname, "defined at", fsrc)
+		
+
+		if not doneOptions then
+			TPerl_Notice("Error:" .. tostring(err))
+		end
+
+		geterrorhandler()(tostring(err) .. "\nWhile calling: " .. fname .. " (" .. fsrc .. ")\n")
+	end
+	return success, err
 end
+]]--
 
 -- GetNamesWithoutBuff
 --[[local matches = {
@@ -518,6 +537,7 @@ function TPerl_Init()
 	f:SetAllPoints(tx)
 	f:SetScript("OnSizeChanged", function(self, width, height)
 		local size = format("%.0f%.0f", width, height)
+		
 		if size == "11" then
 			conf.bar.texture[1] = "Perl v2"
 			conf.bar.texture[2] = "Interface\\AddOns\\TPerl\\Images\\TPerl_StatusBar"
@@ -527,7 +547,7 @@ function TPerl_Init()
 	tx:SetTexture(conf.bar.texture[2])
 	tx:SetSize(0, 0)
 
-	TPerl_pcall(TPerl_OptionActions)
+	TPerl_OptionActions()
 
 	--PartyMemberFrame:UnregisterEvent("UNIT_NAME_UPDATE")
 
@@ -611,7 +631,7 @@ function TPerl_Init()
 
 	--TPerl_RegisterSMBarTextures()
 
-	TPerl_pcall(TPerl_DebufHighlightInit)
+	TPerl_DebufHighlightInit()
 
 	TPerl_Init = nil
 end
@@ -733,19 +753,23 @@ end
 -- TPerl_SetTextTransparency()
 function TPerl_SetTextTransparency()
 	local t = conf.transparency.text
+
 	for k, v in pairs(unitText) do
-		if (v.GetTextColor) then
+		if v and v.GetTextColor and v.SetTextColor then
+			-- Let WoW throw the real error + stack if this is illegal/tainted/secret
 			local r, g, b = v:GetTextColor()
+
+--[[
+			if issecretvalue and (issecretvalue(r) or issecretvalue(g) or issecretvalue(b)) then
+				print("SECRET RGB at key:", tostring(k), "obj:", tostring(v),
+					" rS=", tostring(issecretvalue(r)),
+					" gS=", tostring(issecretvalue(g)),
+					" bS=", tostring(issecretvalue(b)))
+			end ]]--
+
+			-- Same here: crash immediately if SetTextColor can't accept these values
 			v:SetTextColor(r, g, b, t)
 		end
-	end
-	if TPerl_Player_TargettingFrametext then
-		local r, g, b = TPerl_Player_TargettingFrametext:GetTextColor()
-		TPerl_Player_TargettingFrametext:SetTextColor(r, g, b, t)
-	end
-	if TPerl_Target_AssistFrametext then
-		local r, g, b = TPerl_Target_AssistFrametext:GetTextColor()
-		TPerl_Target_AssistFrametext:SetTextColor(r, g, b, t)
 	end
 end
 
@@ -771,9 +795,10 @@ end
 local TPerlBars = {}
 function TPerl_RegisterBar(bar)
 	tinsert(TPerlBars, bar)
+	--print("InitDone test: ", issecretvalue(init_done))
 	if (init_done) then
-		local tex = TPerl_GetBarTexture()
-		Set1Bar(bar, tex)
+		--local tex = TPerl_GetBarTexture()
+		--Set1Bar(bar, tex)
 	end
 end
 
@@ -786,10 +811,28 @@ function TPerl_SetBarTextures()
 end
 
 -- TPerl_RegisterOptionChanger
-local optionFuncs = {}
-function TPerl_RegisterOptionChanger(f, s)
-	tinsert(optionFuncs, {func = f, slf = s})
+optionFuncs = {}
+local optionFuncCount = 0
+
+function TPerl_RegisterOptionChanger(f, s, name)
+	optionFuncCount = optionFuncCount + 1
+
+	local entry = {
+		func = f,
+		slf  = s,
+		name = name or tostring(f)
+	}
+
+	tinsert(optionFuncs, entry)
+
+	-- DEBUG: print registrations if needed
+	--[[
+	print("TPerl RegisterOptionChanger["..optionFuncCount.."]",
+		"name=", entry.name,
+		"func=", tostring(f),
+		"slf=", tostring(s)) ]]--
 end
+
 
 -- TPerl_OptionActions()
 function TPerl_OptionActions(which)
@@ -804,17 +847,20 @@ function TPerl_OptionActions(which)
 	conf.transparency.frame	= min(max(tonumber(conf.transparency.frame or 1), 0), 1)
 	conf.transparency.text	= min(max(tonumber(conf.transparency.text or 1), 0), 1)
 
-	TPerl_pcall(TPerl_SetBarTextures)
+	TPerl_SetBarTextures()
 
-	TPerl_pcall(TPerl_SetAllFrames)
+	TPerl_SetAllFrames()
 
 	for k, v in pairs(optionFuncs) do
 		TPerl_NoFadeBars(true)
-		TPerl_pcall(v.func, v.slf, which)
+		--print(3)
+		v.func( v.slf, which)
 	end
+
 	TPerl_NoFadeBars()
 
-	TPerl_pcall(TPerl_SetTextTransparency)
+	--print(4)
+	TPerl_SetTextTransparency()
 	doneOptions = true
 
 	-- Avoid tainting default blizzard buffs using cooldown options. Cooldowns won't show immediately atm.
